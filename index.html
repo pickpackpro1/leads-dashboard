@@ -1,0 +1,3302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Pick Pack Pro - Leads Dashboard v5</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f4f6f8; color: #1a2332; padding: 20px; }
+  .header { background: linear-gradient(135deg, #1e3a5f 0%, #2c5282 100%); color: white; padding: 24px 28px; border-radius: 12px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .header h1 { font-size: 24px; font-weight: 600; }
+  .header p { opacity: 0.85; font-size: 14px; margin-top: 4px; }
+  .header-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .btn { padding: 10px 18px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-primary { background: #2563eb; color: white; }
+  .btn-primary:hover { background: #1d4ed8; }
+  .btn-success { background: #10b981; color: white; }
+  .btn-success:hover { background: #059669; }
+  .btn-secondary { background: white; color: #1e3a5f; border: 1px solid #cbd5e1; }
+  .btn-secondary:hover { background: #f1f5f9; }
+  .btn-danger { background: #ef4444; color: white; padding: 6px 10px; font-size: 12px; }
+  .btn-edit { background: #f59e0b; color: white; padding: 6px 10px; font-size: 12px; }
+  .btn-view { background: #6366f1; color: white; padding: 6px 10px; font-size: 12px; }
+  .btn-mini { padding: 5px 10px; font-size: 12px; }
+
+  .view-toggle { display: inline-flex; background: white; border-radius: 8px; padding: 4px; border: 1px solid #cbd5e1; flex-wrap: wrap; }
+  .view-toggle button { padding: 8px 16px; border: none; background: transparent; cursor: pointer; border-radius: 6px; font-size: 14px; font-weight: 500; color: #64748b; }
+  .view-toggle button.active { background: #2563eb; color: white; }
+
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat-card { background: white; padding: 18px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border-left: 4px solid #2563eb; }
+  .stat-card.urgent { border-left-color: #ef4444; background: #fef2f2; }
+  .stat-card.warning { border-left-color: #f59e0b; }
+  .stat-card.won { border-left-color: #10b981; }
+  .stat-card.pipeline { border-left-color: #8b5cf6; }
+  .stat-label { font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+  .stat-value { font-size: 26px; font-weight: 700; color: #1e3a5f; margin-top: 6px; }
+  .stat-sub { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+
+  .alert-banner { background: #fef2f2; border: 1px solid #fecaca; border-left: 4px solid #ef4444; color: #991b1b; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; display: none; align-items: center; gap: 10px; }
+  .alert-banner.active { display: flex; }
+  .backup-banner { background: #fffbeb; border: 1px solid #fde68a; border-left: 4px solid #f59e0b; color: #92400e; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; display: none; }
+  .backup-banner.active { display: block; }
+
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  .chart-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .chart-box h3 { font-size: 14px; color: #475569; margin-bottom: 12px; font-weight: 600; }
+  .chart-container { position: relative; height: 220px; }
+
+  .filters { background: white; padding: 16px; border-radius: 10px; margin-bottom: 16px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .filters input, .filters select { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; min-width: 140px; }
+  .filters input[type="search"] { flex: 1; min-width: 220px; }
+  .date-filter-group { display: flex; gap: 6px; align-items: center; background: #f8fafc; padding: 6px 10px; border-radius: 8px; border: 1px solid #e2e8f0; flex-wrap: wrap; }
+  .date-filter-group input[type="date"] { min-width: 130px; padding: 6px 8px; }
+  .date-preset { padding: 4px 10px; background: white; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  .date-preset:hover { background: #eff6ff; border-color: #2563eb; }
+
+  .bulk-bar { display: none; background: #1e3a5f; color: white; padding: 12px 18px; border-radius: 8px; margin-bottom: 12px; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .bulk-bar.active { display: flex; }
+  .bulk-bar .btn { padding: 7px 14px; font-size: 13px; }
+
+  .table-wrap { background: white; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead { background: #f8fafc; }
+  th { text-align: left; padding: 12px 14px; font-weight: 600; color: #475569; font-size: 12px; text-transform: uppercase; letter-spacing: 0.4px; border-bottom: 1px solid #e2e8f0; cursor: pointer; white-space: nowrap; }
+  th.no-sort { cursor: default; }
+  th:hover:not(.no-sort) { background: #f1f5f9; }
+  td { padding: 12px 14px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+  tr:hover { background: #f8fafc; }
+  tr.overdue { background: #fef2f2; }
+  tr.overdue:hover { background: #fee2e2; }
+  tr.stuck { background: #fffbeb; }
+  tr.stuck:hover { background: #fef3c7; }
+  tr.selected { background: #eff6ff !important; }
+
+  .lead-id { font-family: 'Monaco', monospace; font-size: 11px; color: #64748b; background: #f1f5f9; padding: 2px 6px; border-radius: 4px; }
+
+  .followup-dots { display: inline-flex; gap: 3px; align-items: center; }
+  .followup-dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #cbd5e1; background: white; display: inline-block; }
+  .followup-dot.done { background: #10b981; border-color: #10b981; position: relative; }
+  .followup-dot.done::after { content: '✓'; color: white; font-size: 10px; position: absolute; top: -2px; left: 2px; font-weight: 700; }
+  .followup-count { font-size: 11px; color: #64748b; margin-left: 4px; }
+
+  /* Quick actions */
+  .quick-actions { display: inline-flex; gap: 4px; }
+  .qa-btn { padding: 4px 8px; border: 1px solid #cbd5e1; background: white; border-radius: 5px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+  .qa-btn:hover { background: #eff6ff; border-color: #2563eb; }
+  .qa-done { color: #059669; border-color: #a7f3d0; }
+  .qa-done:hover { background: #d1fae5; border-color: #059669; }
+  .snooze-menu { position: relative; display: inline-block; }
+  .snooze-options { display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 50; min-width: 90px; }
+  .snooze-menu.open .snooze-options { display: block; }
+  .snooze-options button { display: block; width: 100%; padding: 7px 12px; border: none; background: none; text-align: left; font-size: 12px; cursor: pointer; }
+  .snooze-options button:hover { background: #eff6ff; }
+
+  /* Today view */
+  .today-section { background: white; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 16px; overflow: hidden; }
+  .today-section-header { padding: 14px 18px; font-weight: 700; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .today-section-header .count { background: rgba(255,255,255,0.6); padding: 2px 10px; border-radius: 12px; font-size: 12px; }
+  .today-section.sec-overdue .today-section-header { background: #fee2e2; color: #991b1b; }
+  .today-section.sec-today .today-section-header { background: #fef3c7; color: #92400e; }
+  .today-section.sec-schedule .today-section-header { background: #fce7f3; color: #be185d; }
+  .today-section.sec-stuck .today-section-header { background: #e0e7ff; color: #4338ca; }
+  .today-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 18px; border-bottom: 1px solid #f1f5f9; gap: 12px; flex-wrap: wrap; }
+  .today-item:last-child { border-bottom: none; }
+  .today-item:hover { background: #f8fafc; }
+  .today-item-info { flex: 1; min-width: 240px; cursor: pointer; }
+  .today-item-title { font-weight: 700; font-size: 14px; color: #1e3a5f; }
+  .today-item-sub { font-size: 12px; color: #64748b; margin-top: 2px; }
+  .today-item-meta { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+  .today-empty { padding: 30px; text-align: center; color: #94a3b8; font-size: 14px; }
+  .today-allclear { background: white; border-radius: 10px; padding: 50px 20px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .today-allclear h2 { color: #059669; margin-bottom: 8px; }
+  .today-allclear p { color: #64748b; font-size: 14px; }
+
+  /* Insights */
+  .insights-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .insights-box { background: white; padding: 20px; border-radius: 10px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+  .insights-box h3 { font-size: 14px; color: #475569; margin-bottom: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+  .insights-box.full { grid-column: 1 / -1; }
+  .funnel-stage { margin-bottom: 10px; }
+  .funnel-bar-wrap { background: #f1f5f9; border-radius: 6px; overflow: hidden; height: 34px; position: relative; }
+  .funnel-bar { height: 100%; display: flex; align-items: center; padding-left: 12px; color: white; font-size: 12px; font-weight: 700; border-radius: 6px; min-width: 60px; }
+  .funnel-drop { font-size: 11px; color: #ef4444; margin: 2px 0 6px 12px; }
+  .roi-table { width: 100%; font-size: 13px; }
+  .roi-table th { padding: 8px 10px; font-size: 11px; }
+  .roi-table td { padding: 8px 10px; }
+  .velocity-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .velocity-card { background: #f8fafc; border-radius: 8px; padding: 14px; text-align: center; }
+  .velocity-card .v-num { font-size: 24px; font-weight: 700; color: #1e3a5f; }
+  .velocity-card .v-label { font-size: 11px; color: #64748b; text-transform: uppercase; margin-top: 4px; }
+
+  .kanban-board { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 10px; }
+  .kanban-column { background: #eef2f7; border-radius: 10px; min-width: 280px; width: 280px; flex-shrink: 0; display: flex; flex-direction: column; max-height: calc(100vh - 100px); }
+  .kanban-column-header { padding: 14px 16px; border-bottom: 2px solid white; display: flex; justify-content: space-between; align-items: center; border-radius: 10px 10px 0 0; }
+  .kanban-column-header h3 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kanban-column-header .count { background: rgba(255,255,255,0.5); padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .kanban-cards { padding: 10px; overflow-y: auto; flex: 1; min-height: 100px; }
+  .kanban-cards.drag-over { background: rgba(37,99,235,0.1); }
+  .kanban-card { background: white; padding: 12px; border-radius: 8px; margin-bottom: 8px; cursor: grab; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border-left: 3px solid #cbd5e1; }
+  .kanban-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); transform: translateY(-1px); }
+  .kanban-card.dragging { opacity: 0.5; cursor: grabbing; }
+  .kanban-card.priority-High { border-left-color: #dc2626; }
+  .kanban-card.priority-Medium { border-left-color: #f59e0b; }
+  .kanban-card.priority-Low { border-left-color: #94a3b8; }
+  .kanban-card-company { font-weight: 700; font-size: 14px; color: #1e3a5f; margin-bottom: 4px; }
+  .kanban-card-contact { font-size: 12px; color: #64748b; margin-bottom: 8px; }
+  .kanban-card-meta { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
+  .kanban-card-value { font-weight: 600; color: #059669; }
+  .kanban-card-flags { display: flex; gap: 4px; margin-top: 8px; flex-wrap: wrap; }
+
+  .col-New { background: linear-gradient(180deg, #e0e7ff 0%, #eef2f7 100%); }
+  .col-New .kanban-column-header { color: #4338ca; }
+  .col-Contacted { background: linear-gradient(180deg, #cffafe 0%, #eef2f7 100%); }
+  .col-Contacted .kanban-column-header { color: #0e7490; }
+  .col-Negotiation { background: linear-gradient(180deg, #fce7f3 0%, #eef2f7 100%); }
+  .col-Negotiation .kanban-column-header { color: #be185d; }
+  .col-Won { background: linear-gradient(180deg, #d1fae5 0%, #eef2f7 100%); }
+  .col-Won .kanban-column-header { color: #065f46; }
+  .col-Onboarding { background: linear-gradient(180deg, #ccfbf1 0%, #eef2f7 100%); }
+  .col-Onboarding .kanban-column-header { color: #0f766e; }
+  .col-Completed { background: linear-gradient(180deg, #bbf7d0 0%, #eef2f7 100%); }
+  .col-Completed .kanban-column-header { color: #14532d; }
+  .col-Unqualified { background: linear-gradient(180deg, #fef3c7 0%, #eef2f7 100%); }
+  .col-Unqualified .kanban-column-header { color: #92400e; }
+  .col-NoReply { background: linear-gradient(180deg, #e2e8f0 0%, #eef2f7 100%); }
+  .col-NoReply .kanban-column-header { color: #475569; }
+  .col-Lost { background: linear-gradient(180deg, #fee2e2 0%, #eef2f7 100%); }
+  .col-Lost .kanban-column-header { color: #991b1b; }
+
+  .status-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; text-transform: uppercase; }
+  .status-New { background: #e0e7ff; color: #4338ca; }
+  .status-Contacted { background: #cffafe; color: #0e7490; }
+  .status-Negotiation { background: #fce7f3; color: #be185d; }
+  .status-Won { background: #d1fae5; color: #065f46; }
+  .status-Onboarding { background: #ccfbf1; color: #0f766e; }
+  .status-Completed { background: #bbf7d0; color: #14532d; }
+  .status-Unqualified { background: #fef3c7; color: #92400e; }
+  .status-NoReply { background: #e2e8f0; color: #475569; }
+  .status-Lost { background: #fee2e2; color: #991b1b; }
+
+  .priority-High { color: #dc2626; font-weight: 600; }
+  .priority-Medium { color: #d97706; font-weight: 600; }
+  .priority-Low { color: #64748b; font-weight: 600; }
+
+  .score-badge { display: inline-block; padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; min-width: 36px; text-align: center; }
+  .score-hot { background: #fee2e2; color: #991b1b; }
+  .score-warm { background: #fed7aa; color: #9a3412; }
+  .score-cool { background: #dbeafe; color: #1e40af; }
+  .score-cold { background: #e2e8f0; color: #475569; }
+
+  .overdue-flag, .stuck-flag { display: inline-block; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700; }
+  .overdue-flag { background: #ef4444; }
+  .stuck-flag { background: #f59e0b; }
+
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
+  .modal-overlay.active { display: flex; }
+  .modal { background: white; border-radius: 12px; padding: 24px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; }
+  .modal.modal-sm { max-width: 480px; }
+  .modal h2 { margin-bottom: 18px; color: #1e3a5f; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: #475569; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; font-family: inherit; }
+  .form-group textarea { resize: vertical; min-height: 70px; }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+
+  .followup-tracker { background: #f8fafc; padding: 14px; border-radius: 8px; }
+  .followup-row { display: grid; grid-template-columns: auto 1fr auto; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+  .followup-row:last-child { border-bottom: none; }
+  .followup-row label { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #1e3a5f; cursor: pointer; }
+  .followup-row input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+  .followup-row input[type="date"] { padding: 5px 8px; font-size: 12px; border: 1px solid #cbd5e1; border-radius: 4px; }
+
+  .detail-section { margin-bottom: 24px; }
+  .detail-section h3 { font-size: 14px; color: #475569; margin-bottom: 10px; padding-bottom: 6px; border-bottom: 1px solid #e2e8f0; text-transform: uppercase; letter-spacing: 0.4px; }
+  .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .detail-item { font-size: 13px; }
+  .detail-item .label { color: #94a3b8; font-size: 11px; text-transform: uppercase; }
+  .detail-item .value { color: #1e3a5f; font-weight: 500; margin-top: 2px; }
+  .activity-log { max-height: 250px; overflow-y: auto; background: #f8fafc; padding: 12px; border-radius: 8px; }
+  .activity-item { padding: 8px 0; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
+  .activity-item:last-child { border-bottom: none; }
+  .activity-time { font-size: 11px; color: #94a3b8; }
+  .activity-text { color: #1e3a5f; margin-top: 2px; }
+  .add-note { display: flex; gap: 8px; margin-top: 10px; }
+  .add-note input { flex: 1; padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+
+  .template-list { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .template-btn { padding: 10px 14px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; color: #1e40af; cursor: pointer; font-size: 13px; text-align: left; }
+  .template-btn:hover { background: #dbeafe; }
+  .template-btn strong { display: block; margin-bottom: 2px; }
+  .template-btn small { color: #64748b; }
+  .email-preview { background: #f8fafc; padding: 14px; border-radius: 8px; margin-top: 12px; font-size: 13px; white-space: pre-wrap; border: 1px solid #e2e8f0; max-height: 280px; overflow-y: auto; }
+
+  .attachments-list { display: flex; flex-direction: column; gap: 6px; }
+  .attachment-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: #f8fafc; border-radius: 6px; font-size: 13px; }
+  .attach-area { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 16px; text-align: center; margin-top: 10px; cursor: pointer; }
+  .attach-area:hover { border-color: #2563eb; background: #eff6ff; }
+
+  .checklist-item { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px; font-size: 13px; }
+  .checklist-item input[type="checkbox"] { margin-top: 3px; cursor: pointer; }
+  .checklist-item label { cursor: pointer; flex: 1; }
+  .checklist-item.done label { text-decoration: line-through; color: #94a3b8; }
+  .checklist-progress { background: #e2e8f0; height: 6px; border-radius: 3px; margin-bottom: 12px; overflow: hidden; }
+  .checklist-progress-bar { height: 100%; background: linear-gradient(90deg, #10b981, #059669); }
+
+  .settings-row { display: grid; grid-template-columns: 1fr 80px; gap: 14px; align-items: center; padding: 10px 0; border-bottom: 1px solid #e2e8f0; }
+  .settings-row label { font-size: 13px; font-weight: 600; color: #1e3a5f; }
+  .settings-row small { display: block; color: #64748b; font-weight: 400; margin-top: 2px; font-size: 12px; }
+  .settings-row input[type="number"] { padding: 8px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; text-align: right; }
+  .settings-section { margin-bottom: 20px; }
+  .settings-section h3 { font-size: 13px; color: #475569; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 8px; }
+
+  .digest-stat { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f1f5f9; font-size: 14px; }
+  .digest-stat:last-child { border-bottom: none; }
+  .digest-stat .d-label { color: #475569; }
+  .digest-stat .d-value { font-weight: 700; color: #1e3a5f; }
+  .digest-stat.d-urgent .d-value { color: #dc2626; }
+
+  .validation-report { max-height: 300px; overflow-y: auto; background: #f8fafc; border-radius: 8px; padding: 12px; margin: 12px 0; font-size: 13px; }
+  .validation-item { padding: 6px 0; border-bottom: 1px solid #e2e8f0; }
+  .validation-item:last-child { border-bottom: none; }
+  .v-warn { color: #92400e; }
+  .v-error { color: #991b1b; }
+
+  .bin-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px; font-size: 13px; }
+
+  /* Tasks */
+  .task-item { display: flex; align-items: center; gap: 10px; padding: 9px 12px; background: #f8fafc; border-radius: 6px; margin-bottom: 6px; font-size: 13px; }
+  .task-item.done label { text-decoration: line-through; color: #94a3b8; }
+  .task-item.overdue-task { background: #fef2f2; border: 1px solid #fecaca; }
+  .task-item input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; flex-shrink: 0; }
+  .task-item label { flex: 1; cursor: pointer; }
+  .task-due { font-size: 11px; color: #64748b; white-space: nowrap; }
+  .task-due.late { color: #dc2626; font-weight: 700; }
+  .task-add { display: grid; grid-template-columns: 1fr 150px auto; gap: 8px; margin-top: 10px; }
+  .task-add input { padding: 8px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 13px; }
+  .task-badge { background: #fef3c7; color: #92400e; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 700; }
+  .task-badge.late { background: #fee2e2; color: #991b1b; }
+
+  /* Targets */
+  .target-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; }
+  .target-card { background: #f8fafc; border-radius: 8px; padding: 14px; }
+  .target-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; }
+  .target-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.4px; font-weight: 700; }
+  .target-nums { font-size: 15px; font-weight: 700; color: #1e3a5f; }
+  .target-bar-wrap { background: #e2e8f0; height: 10px; border-radius: 5px; overflow: hidden; }
+  .target-bar { height: 100%; border-radius: 5px; transition: width 0.3s; }
+  .target-pace { font-size: 11px; margin-top: 6px; font-weight: 600; }
+  .pace-ahead { color: #059669; }
+  .pace-behind { color: #dc2626; }
+  .pace-on { color: #2563eb; }
+
+  .sec-tasks .today-section-header { background: #ffedd5; color: #9a3412; }
+  .sec-tasks-today .today-section-header { background: #fef9c3; color: #854d0e; }
+
+  .backup-choice { display: flex; flex-direction: column; gap: 10px; margin: 14px 0; }
+  .backup-option { border: 1px solid #cbd5e1; border-radius: 8px; padding: 14px; cursor: pointer; }
+  .backup-option:hover { border-color: #2563eb; background: #eff6ff; }
+  .backup-option strong { display: block; margin-bottom: 3px; color: #1e3a5f; }
+  .backup-option small { color: #64748b; font-size: 12px; }
+
+  .empty-state { text-align: center; padding: 50px 20px; color: #94a3b8; }
+  .empty-state h3 { margin-bottom: 8px; color: #475569; }
+
+  #fileInput, #attachFileInput { display: none; }
+
+  .import-info { background: #eff6ff; border: 1px solid #bfdbfe; color: #1e40af; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; display: none; }
+  .import-info.active { display: block; }
+
+  .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px; }
+
+  @media (max-width: 768px) {
+    .charts-row, .insights-grid { grid-template-columns: 1fr; }
+    .form-grid, .detail-grid, .template-list { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>📦 Pick Pack Pro — Leads Dashboard</h1>
+    <p>Track and manage your 3PL prospects from first contact to closed deal</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-secondary" onclick="showDigest(true)">🔔 Digest</button>
+    <button class="btn btn-secondary" onclick="openBin()">🗑️ Bin (<span id="binCount">0</span>)</button>
+    <button class="btn btn-secondary" onclick="openSettings()">⚙️ Settings</button>
+    <button class="btn btn-secondary" onclick="openBackup()">🗄️ Backup</button>
+    <button class="btn btn-secondary" onclick="exportAllCalendar()">📅 Calendar</button>
+    <button class="btn btn-secondary" onclick="openEmailParser()">📧 Parse Email</button>
+    <button class="btn btn-secondary" onclick="downloadTemplate()">📥 Template</button>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" onchange="handleFileUpload(event)">
+    <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">📤 Import</button>
+    <button class="btn btn-success" onclick="exportToExcel()">💾 Export</button>
+    <button class="btn btn-primary" onclick="openModal()">+ Add Lead</button>
+  </div>
+</div>
+
+<div class="import-info" id="importInfo"></div>
+<div class="backup-banner" id="backupBanner"></div>
+<div class="alert-banner" id="alertBanner"></div>
+
+<div class="stats-grid" id="statsGrid"></div>
+
+<div class="charts-row" id="chartsRow">
+  <div class="chart-box"><h3>Leads by Status</h3><div class="chart-container"><canvas id="statusChart"></canvas></div></div>
+  <div class="chart-box"><h3>Leads by Source</h3><div class="chart-container"><canvas id="sourceChart"></canvas></div></div>
+  <div class="chart-box"><h3>Next Follow-up Timeline</h3><div class="chart-container"><canvas id="followupChart"></canvas></div></div>
+  <div class="chart-box" id="lostChartBox"><h3>Why We Lose</h3><div class="chart-container"><canvas id="lostChart"></canvas></div></div>
+</div>
+
+<div class="toolbar">
+  <div class="view-toggle">
+    <button id="todayViewBtn" onclick="setView('today')">☀️ Today</button>
+    <button id="tableViewBtn" onclick="setView('table')">📋 Table</button>
+    <button id="kanbanViewBtn" onclick="setView('kanban')">📊 Kanban</button>
+    <button id="insightsViewBtn" onclick="setView('insights')">📈 Insights</button>
+  </div>
+</div>
+
+<div class="filters" id="filtersBar">
+  <input type="search" id="searchInput" placeholder="🔍 Search by name, company, email, ID..." oninput="render()">
+  <select id="statusFilter" onchange="render()"><option value="">All Statuses</option></select>
+  <select id="sourceFilter" onchange="render()"><option value="">All Sources</option></select>
+  <select id="priorityFilter" onchange="render()"><option value="">All Priorities</option><option>High</option><option>Medium</option><option>Low</option></select>
+  <select id="alertFilter" onchange="render()">
+    <option value="">All Leads</option>
+    <option value="overdue">⚠️ Overdue</option>
+    <option value="today">📅 Due Today</option>
+    <option value="stuck">⏰ Stuck &gt;14d</option>
+    <option value="hot">🔥 Hot (80+)</option>
+  </select>
+  <div class="date-filter-group">
+    <select id="dateFilterField" onchange="render()" style="min-width:140px">
+      <option value="dateReceived">Date Received</option>
+      <option value="nextFollowUp">Next Follow-up</option>
+      <option value="lastFollowUp">Last Follow-up</option>
+    </select>
+    <input type="date" id="dateFrom" onchange="render()">
+    <span style="color:#64748b">→</span>
+    <input type="date" id="dateTo" onchange="render()">
+    <button class="date-preset" onclick="setDatePreset('today')">Today</button>
+    <button class="date-preset" onclick="setDatePreset('7d')">7d</button>
+    <button class="date-preset" onclick="setDatePreset('30d')">30d</button>
+    <button class="date-preset" onclick="setDatePreset('month')">This Mo</button>
+    <button class="date-preset" onclick="setDatePreset('clear')">Clear</button>
+  </div>
+</div>
+
+<div class="bulk-bar" id="bulkBar">
+  <span><strong id="bulkCount">0</strong> selected</span>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <select id="bulkStatusSelect" style="padding:6px 10px;border-radius:6px;border:1px solid #cbd5e1;font-size:13px"><option value="">Change Status…</option></select>
+    <button class="btn btn-secondary" onclick="bulkChangeStatus()">Apply</button>
+    <button class="btn btn-success" onclick="bulkExport()">💾 Export Selected</button>
+    <button class="btn btn-danger" onclick="bulkDelete()">🗑️ Delete</button>
+    <button class="btn btn-secondary" onclick="clearSelection()">Clear</button>
+  </div>
+</div>
+
+<div id="todayView" style="display:none"></div>
+
+<div id="tableView" class="table-wrap" style="display:none">
+  <table id="leadsTable">
+    <thead>
+      <tr>
+        <th class="no-sort"><input type="checkbox" id="selectAllCheckbox" onchange="toggleSelectAll(this.checked)"></th>
+        <th class="no-sort">#</th>
+        <th class="no-sort">ID</th>
+        <th onclick="sortBy('score')">Score</th>
+        <th onclick="sortBy('dateReceived')">Date Received</th>
+        <th onclick="sortBy('contactName')">Contact</th>
+        <th onclick="sortBy('company')">Company</th>
+        <th onclick="sortBy('email')">Email</th>
+        <th onclick="sortBy('source')">Source</th>
+        <th onclick="sortBy('serviceInterest')">Service</th>
+        <th onclick="sortBy('estimatedValue')">Est. Value (£)</th>
+        <th onclick="sortBy('status')">Status</th>
+        <th onclick="sortBy('priority')">Priority</th>
+        <th class="no-sort">Follow-ups</th>
+        <th onclick="sortBy('lastFollowUp')">Last FU</th>
+        <th onclick="sortBy('nextFollowUp')">Next FU</th>
+        <th class="no-sort">Quick</th>
+        <th class="no-sort">📎</th>
+        <th class="no-sort">Actions</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<div id="kanbanView" class="kanban-board" style="display:none"></div>
+
+<div id="insightsView" style="display:none"></div>
+
+<!-- Add/Edit Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">Add New Lead</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>Lead ID</label><input type="text" id="f_leadId" readonly style="background:#f1f5f9;font-family:monospace"></div>
+      <div class="form-group"><label>Date Received *</label><input type="date" id="f_dateReceived"></div>
+      <div class="form-group"><label>Contact Name *</label><input type="text" id="f_contactName"></div>
+      <div class="form-group"><label>Company *</label><input type="text" id="f_company"></div>
+      <div class="form-group"><label>Job Title</label><input type="text" id="f_jobTitle"></div>
+      <div class="form-group"><label>Email <span style="color:#64748b;text-transform:none;font-weight:400">(duplicate key)</span></label><input type="email" id="f_email"></div>
+      <div class="form-group"><label>Phone</label><input type="text" id="f_phone"></div>
+      <div class="form-group"><label>Website</label><input type="text" id="f_website"></div>
+      <div class="form-group">
+        <label>Source *</label>
+        <select id="f_source">
+          <option>Email Inquiry</option><option>Website Form</option><option>Referral</option>
+          <option>LinkedIn</option><option>Cold Outreach</option><option>Trade Show</option>
+          <option>Amazon Seller Forum</option><option>Existing Client</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Service Interest</label>
+        <select id="f_serviceInterest">
+          <option>FBA Prep</option><option>SFP (Seller Fulfilled Prime)</option>
+          <option>DTC Fulfilment</option><option>TikTok Live Studio</option>
+          <option>Storage Only</option><option>Returns Management</option>
+          <option>Multi-channel</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Monthly Order Volume</label><input type="number" id="f_volume"></div>
+      <div class="form-group"><label>Estimated Value (£/month)</label><input type="number" id="f_estimatedValue"></div>
+      <div class="form-group"><label>Status *</label><select id="f_status" onchange="handleStatusChange(this.value)"></select></div>
+      <div class="form-group"><label>Priority</label><select id="f_priority"><option>High</option><option>Medium</option><option>Low</option></select></div>
+      <div class="form-group"><label>Next Follow-up</label><input type="date" id="f_nextFollowUp"></div>
+      <div class="form-group" id="dateWonGroup" style="display:none"><label>Date Won 🏆</label><input type="date" id="f_dateWon"></div>
+      <div class="form-group"><label>Owner</label><input type="text" id="f_owner"></div>
+      <div class="form-group full"><label>Product Category</label><input type="text" id="f_productCategory"></div>
+      <div class="form-group full">
+        <label>Follow-up Tracker (up to 4)</label>
+        <div class="followup-tracker" id="followupTracker"></div>
+      </div>
+      <div class="form-group full" id="lostReasonGroup" style="display:none">
+        <label>Reason * <span style="color:#dc2626">(required)</span></label>
+        <select id="f_lostReason">
+          <option value="">— Select reason —</option>
+          <option>Price — too expensive</option>
+          <option>Capability — missing service</option>
+          <option>Timing — not ready yet</option>
+          <option>Competitor — went elsewhere</option>
+          <option>No response — went cold</option>
+          <option>Volume — too small for us</option>
+          <option>Location — geographical fit</option>
+          <option>Internal change — paused/closed</option>
+          <option>Bad fit — not our ICP</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-group full" id="lostNotesGroup" style="display:none"><label>Details</label><input type="text" id="f_lostNotes"></div>
+      <div class="form-group full"><label>Notes</label><textarea id="f_notes"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveLead()">Save Lead</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="detailOverlay"><div class="modal" id="detailContent"></div></div>
+
+<!-- Email Parser Modal -->
+<div class="modal-overlay" id="parserOverlay">
+  <div class="modal">
+    <h2>📧 Parse Inquiry Email</h2>
+    <p style="color:#64748b;font-size:13px;margin-bottom:14px">Paste the full inquiry email. Duplicates (by email) are blocked.</p>
+    <textarea id="emailContent" style="width:100%;min-height:240px;padding:12px;border:1px solid #cbd5e1;border-radius:8px;font-family:Monaco,monospace;font-size:13px"></textarea>
+    <div id="parserResult"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeParser()">Cancel</button>
+      <button class="btn btn-primary" onclick="parseEmail()">🔍 Parse</button>
+      <button class="btn btn-success" id="createFromParseBtn" style="display:none" onclick="createFromParse()">✓ Create Lead</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings Modal -->
+<div class="modal-overlay" id="settingsOverlay">
+  <div class="modal">
+    <h2>⚙️ Settings</h2>
+    <div class="settings-section">
+      <h3>Follow-up Cadence (days until next follow-up)</h3>
+      <div class="settings-row"><label>After Follow-up 1<small>Auto-set next follow-up this many days after FU1 (quick actions only)</small></label><input type="number" id="c_after1" min="1" max="60"></div>
+      <div class="settings-row"><label>After Follow-up 2</label><input type="number" id="c_after2" min="1" max="60"></div>
+      <div class="settings-row"><label>After Follow-up 3</label><input type="number" id="c_after3" min="1" max="60"></div>
+      <p style="color:#64748b;font-size:12px;margin-top:8px">After Follow-up 4 you'll be prompted to move the lead to "No Reply".</p>
+    </div>
+    <div class="settings-section">
+      <h3>Monthly Targets <span style="font-weight:400;text-transform:none;color:#94a3b8">(leave blank to not track)</span></h3>
+      <div class="settings-row"><label>New leads per month<small>How many new leads should come in</small></label><input type="number" id="t_leads" min="0"></div>
+      <div class="settings-row"><label>Deals won per month<small>Counted by Date Won</small></label><input type="number" id="t_wins" min="0"></div>
+      <div class="settings-row"><label>Won revenue per month (£)<small>Sum of monthly values of deals won this month</small></label><input type="number" id="t_revenue" min="0"></div>
+      <div class="settings-row"><label>Calls per week<small>Calls logged Mon–Sun</small></label><input type="number" id="t_calls" min="0"></div>
+    </div>
+    <div class="settings-section">
+      <h3>Lead Scoring Weights</h3>
+      <div class="settings-row"><label>Estimated Value — max points (£5,000+)<small>£3,000+ = 73%, £1,500+ = 50%, £500+ = 27%</small></label><input type="number" id="w_value" min="0" max="50"></div>
+      <div class="settings-row"><label>Monthly Volume — max points (5,000+ units)<small>2,000+ = 70%, 500+ = 40%, any = 20%</small></label><input type="number" id="w_volume" min="0" max="50"></div>
+      <div class="settings-row"><label>Service Fit — max points (SFP / TikTok / Multi-ch)<small>FBA Prep / DTC = 60%, other = 30%</small></label><input type="number" id="w_service" min="0" max="50"></div>
+      <div class="settings-row"><label>Source Quality — max points (Referral / Existing)<small>Website / LinkedIn / Forum = 67%, other = 33%</small></label><input type="number" id="w_source" min="0" max="50"></div>
+      <div class="settings-row"><label>Priority — max points (High)<small>Medium = 50%, Low = 0</small></label><input type="number" id="w_priority" min="0" max="50"></div>
+      <div class="settings-row"><label>Stage Progress — max points (Negotiation)<small>Contacted = 60%, Won = 50%</small></label><input type="number" id="w_stage" min="0" max="50"></div>
+      <div class="settings-row"><label>Stale Lead Penalty<small>Full &gt;60 days stuck, half &gt;30 days</small></label><input type="number" id="w_stalePenalty" min="0" max="30"></div>
+      <p style="color:#64748b;font-size:12px;margin-top:10px">Sum (excluding penalty): <strong id="weightSum">100</strong></p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeSettings()">Cancel</button>
+      <button class="btn btn-secondary" onclick="resetWeights()">Reset Defaults</button>
+      <button class="btn btn-primary" onclick="saveSettings()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Daily Digest Modal -->
+<div class="modal-overlay" id="digestOverlay">
+  <div class="modal modal-sm">
+    <h2>☀️ Daily Digest</h2>
+    <div id="digestContent"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeDigest()">Dismiss</button>
+      <button class="btn btn-primary" onclick="closeDigest();setView('today')">Show today's actions →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Call Log Modal -->
+<div class="modal-overlay" id="callOverlay">
+  <div class="modal modal-sm">
+    <h2>📞 Log Call — <span id="callLeadName" style="font-size:16px;color:#64748b"></span></h2>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>Outcome</label>
+      <select id="callOutcome">
+        <option>Answered — positive</option>
+        <option>Answered — needs time</option>
+        <option>Callback requested</option>
+        <option>No answer</option>
+        <option>Voicemail left</option>
+        <option>Wrong number</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Note (optional)</label>
+      <textarea id="callNote" placeholder="What was discussed..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeCallLog()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCallLog()">Save Call</button>
+    </div>
+  </div>
+</div>
+
+<!-- Recycle Bin Modal -->
+<div class="modal-overlay" id="binOverlay">
+  <div class="modal">
+    <h2>🗑️ Recycle Bin</h2>
+    <p style="color:#64748b;font-size:13px;margin-bottom:14px">Deleted leads stay here for 30 days, then are removed permanently.</p>
+    <div id="binList"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger" onclick="emptyBin()">Empty Bin</button>
+      <button class="btn btn-secondary" onclick="restoreAllBin()">Restore All</button>
+      <button class="btn btn-secondary" onclick="closeBin()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Import Validation Modal -->
+<div class="modal-overlay" id="validationOverlay">
+  <div class="modal">
+    <h2>📤 Import Preview</h2>
+    <div id="validationSummary" style="font-size:14px;margin-bottom:8px"></div>
+    <div class="validation-report" id="validationReport"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="cancelImport()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmImport()">Proceed with Import</button>
+    </div>
+  </div>
+</div>
+
+<!-- Win/Loss Export Modal -->
+<div class="modal-overlay" id="reviewOverlay">
+  <div class="modal modal-sm">
+    <h2>📊 Win/Loss Review Export</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>From</label><input type="date" id="reviewFrom"></div>
+      <div class="form-group"><label>To</label><input type="date" id="reviewTo"></div>
+    </div>
+    <p style="color:#64748b;font-size:12px;margin-top:10px">Exports all deals closed (Won / Unqualified / No Reply / Lost) in this period, with reasons, values, and time-to-close, plus a summary sheet.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeReview()">Cancel</button>
+      <button class="btn btn-success" onclick="exportReview()">💾 Export Review</button>
+    </div>
+  </div>
+</div>
+
+<!-- Backup / Restore Modal -->
+<div class="modal-overlay" id="backupOverlay">
+  <div class="modal">
+    <h2>🗄️ Full Backup &amp; Restore</h2>
+    <p style="color:#64748b;font-size:13px;margin-bottom:6px">A full backup is a single JSON file containing <strong>everything</strong> — leads, activity logs, call history, tasks, stage history, checklists, recycle bin, and all settings. Excel export only holds the lead list, so this is your real safety net.</p>
+    <div id="backupStatus" style="font-size:13px;margin:12px 0;padding:10px 14px;border-radius:8px"></div>
+
+    <h3 style="font-size:13px;color:#475569;text-transform:uppercase;letter-spacing:0.4px;margin:16px 0 8px">Create Backup</h3>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-bottom:10px;cursor:pointer">
+      <input type="checkbox" id="backupIncludeAttachments" checked style="width:16px;height:16px">
+      Include file attachments <span style="color:#64748b">(larger file, but a true full restore)</span>
+    </label>
+    <div id="backupSizeEstimate" style="font-size:12px;color:#64748b;margin-bottom:12px"></div>
+    <button class="btn btn-success" onclick="downloadFullBackup()">💾 Download Full Backup</button>
+
+    <h3 style="font-size:13px;color:#475569;text-transform:uppercase;letter-spacing:0.4px;margin:24px 0 8px">Restore from Backup</h3>
+    <input type="file" id="restoreFileInput" accept=".json" style="display:none" onchange="handleRestoreFile(event)">
+    <button class="btn btn-secondary" onclick="document.getElementById('restoreFileInput').click()">📂 Choose Backup File…</button>
+    <div id="restorePreview"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeBackup()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Weekly Report Modal -->
+<div class="modal-overlay" id="weeklyOverlay">
+  <div class="modal modal-sm">
+    <h2>📊 Weekly Report</h2>
+    <div class="form-grid">
+      <div class="form-group"><label>From</label><input type="date" id="weeklyFrom"></div>
+      <div class="form-group"><label>To</label><input type="date" id="weeklyTo"></div>
+    </div>
+    <p style="color:#64748b;font-size:12px;margin-top:10px">Covers new leads, calls made, follow-ups and tasks completed, deals won and lost, and progress against your targets.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeWeekly()">Cancel</button>
+      <button class="btn btn-secondary" onclick="printWeeklyReport()">🖨️ Printable</button>
+      <button class="btn btn-success" onclick="exportWeeklyExcel()">💾 Excel</button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="attachFileInput" multiple onchange="handleAttachmentUpload(event)">
+
+<script>
+let leads = [];
+let bin = [];
+let editingId = null, viewingId = null, callLeadId = null;
+let sortField = 'score', sortAsc = false;
+let currentView = 'today';
+let statusChart, sourceChart, followupChart, lostChart, trendsChart;
+let parsedLead = null;
+let selectedIds = new Set();
+let leadCounter = 0;
+let pendingImport = null;
+
+const STORAGE_KEY = 'pickpackpro_leads_data_v4';
+const BIN_KEY = 'pickpackpro_leads_bin';
+const COUNTER_KEY = 'pickpackpro_lead_counter';
+const WEIGHTS_KEY = 'pickpackpro_scoring_weights';
+const CADENCE_KEY = 'pickpackpro_cadence';
+const DIGEST_KEY = 'pickpackpro_last_digest';
+const EXPORT_KEY = 'pickpackpro_last_export';
+const BACKUP_KEY = 'pickpackpro_last_backup';
+const TARGETS_KEY = 'pickpackpro_targets';
+
+// ============ SUPABASE SYNC ============
+const SUPABASE_URL = 'https://rkeqyydekyiahlnyovvs.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrZXF5eWRla3lpYWhsbnlvdnZzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQyOTUyMDUsImV4cCI6MjA5OTg3MTIwNX0.sLvdxlKaRKOeLTvhTRbEL8F2mZYu2gmc4hkn51eyyQs';
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+async function pullFromSupabase() {
+  try {
+    const [leadsRes, binRes, settingsRes] = await Promise.all([
+      sb.from('leads').select('data'),
+      sb.from('leads_bin').select('data'),
+      sb.from('app_settings').select('key,value')
+    ]);
+    if (leadsRes.error) throw leadsRes.error;
+    if (binRes.error) throw binRes.error;
+    if (settingsRes.error) throw settingsRes.error;
+    const settingsMap = {};
+    (settingsRes.data || []).forEach(r => { settingsMap[r.key] = r.value; });
+    return {
+      ok: true,
+      leads: (leadsRes.data || []).map(r => r.data),
+      bin: (binRes.data || []).map(r => r.data),
+      settingsMap
+    };
+  } catch (e) {
+    console.error('Supabase pull failed, using local data instead:', e);
+    return { ok: false };
+  }
+}
+
+async function pushLeadsToSupabase() {
+  try {
+    const currentIds = leads.map(l => l.id);
+    const rows = leads.map(l => ({ id: l.id, data: l, updated_at: new Date().toISOString() }));
+    if (rows.length) {
+      const { error } = await sb.from('leads').upsert(rows);
+      if (error) throw error;
+    }
+    const { data: existing, error: selErr } = await sb.from('leads').select('id');
+    if (selErr) throw selErr;
+    const toDelete = (existing || []).map(r => r.id).filter(id => !currentIds.includes(id));
+    if (toDelete.length) await sb.from('leads').delete().in('id', toDelete);
+  } catch (e) { console.error('Supabase leads sync failed:', e); }
+}
+
+async function pushBinToSupabase() {
+  try {
+    const currentIds = bin.map(l => l.id);
+    const rows = bin.map(l => ({ id: l.id, data: l, deleted_at: l.deletedAt || new Date().toISOString() }));
+    if (rows.length) {
+      const { error } = await sb.from('leads_bin').upsert(rows);
+      if (error) throw error;
+    }
+    const { data: existing, error: selErr } = await sb.from('leads_bin').select('id');
+    if (selErr) throw selErr;
+    const toDelete = (existing || []).map(r => r.id).filter(id => !currentIds.includes(id));
+    if (toDelete.length) await sb.from('leads_bin').delete().in('id', toDelete);
+  } catch (e) { console.error('Supabase bin sync failed:', e); }
+}
+
+async function pushSettingToSupabase(key, value) {
+  try {
+    const { error } = await sb.from('app_settings').upsert({ key, value, updated_at: new Date().toISOString() });
+    if (error) throw error;
+  } catch (e) { console.error('Supabase settings sync failed:', e); }
+}
+const BACKUP_VERSION = 7;
+
+const PIPELINE_STATUSES = ['New', 'Contacted', 'Negotiation'];
+const WON_FAMILY = ['Won', 'Onboarding', 'Completed'];
+const ACTIVE_STATUSES = [...PIPELINE_STATUSES, ...WON_FAMILY];
+const DEAD_STATUSES = ['Unqualified', 'No Reply', 'Lost'];
+const ALL_STATUSES = [...ACTIVE_STATUSES, ...DEAD_STATUSES];
+const KANBAN_ORDER = ['New', 'Contacted', 'Negotiation', 'Won', 'Onboarding', 'Completed', 'Unqualified', 'No Reply', 'Lost'];
+const FUNNEL_ORDER = ['New', 'Contacted', 'Negotiation', 'Won', 'Onboarding', 'Completed'];
+
+const DEFAULT_WEIGHTS = { value: 30, volume: 20, service: 20, source: 15, priority: 10, stage: 5, stalePenalty: 0 };
+const DEFAULT_CADENCE = { after1: 3, after2: 5, after3: 7 };
+const DEFAULT_TARGETS = { leads: '', wins: '', revenue: '', calls: '' };
+let weights = { ...DEFAULT_WEIGHTS };
+let cadence = { ...DEFAULT_CADENCE };
+let targets = { ...DEFAULT_TARGETS };
+let pendingRestore = null;
+
+const FIELDS = ['leadId','dateReceived','dateWon','contactName','company','jobTitle','email','phone','website','source','serviceInterest','volume','estimatedValue','status','priority','nextFollowUp','owner','productCategory','notes','lostReason','lostNotes'];
+
+const HANDOFF_CHECKLIST = [
+  'Send welcome email & onboarding pack', 'Assign dedicated warehouse manager',
+  'Schedule kick-off call (warehouse manager + client)', 'Set up client in WMS / FBA prep software',
+  'Confirm SKU list & special handling requirements', 'Agree inbound delivery window & ASN process',
+  'Set up Amazon Seller Central integration (if FBA/SFP)', 'Confirm billing setup, terms, and PO process',
+  'Run first inbound — quality check', 'Schedule 30-day review call'
+];
+
+// ============ STORAGE & MIGRATION ============
+async function loadAll() {
+  try {
+    // Local storage first, so we have something to show/migrate even if offline
+    leads = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    bin = JSON.parse(localStorage.getItem(BIN_KEY) || '[]');
+    leadCounter = parseInt(localStorage.getItem(COUNTER_KEY) || '0');
+    const w = localStorage.getItem(WEIGHTS_KEY);
+    if (w) weights = { ...DEFAULT_WEIGHTS, ...JSON.parse(w) };
+    const c = localStorage.getItem(CADENCE_KEY);
+    if (c) cadence = { ...DEFAULT_CADENCE, ...JSON.parse(c) };
+    const t = localStorage.getItem(TARGETS_KEY);
+    if (t) targets = { ...DEFAULT_TARGETS, ...JSON.parse(t) };
+
+    const hadLocalData = leads.length > 0 || bin.length > 0;
+
+    const cloud = await pullFromSupabase();
+    if (cloud.ok) {
+      const cloudHasData = cloud.leads.length > 0 || cloud.bin.length > 0 || Object.keys(cloud.settingsMap).length > 0;
+      if (cloudHasData) {
+        // Cloud is the source of truth once it has data
+        leads = cloud.leads;
+        bin = cloud.bin;
+        if (cloud.settingsMap.weights) weights = { ...DEFAULT_WEIGHTS, ...cloud.settingsMap.weights };
+        if (cloud.settingsMap.cadence) cadence = { ...DEFAULT_CADENCE, ...cloud.settingsMap.cadence };
+        if (cloud.settingsMap.targets) targets = { ...DEFAULT_TARGETS, ...cloud.settingsMap.targets };
+        if (typeof cloud.settingsMap.counter === 'number') leadCounter = cloud.settingsMap.counter;
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(leads));
+        localStorage.setItem(BIN_KEY, JSON.stringify(bin));
+      } else if (hadLocalData) {
+        // First-ever sync: cloud is empty but this browser has existing local leads — push them up
+        pushLeadsToSupabase();
+        pushBinToSupabase();
+        pushSettingToSupabase('weights', weights);
+        pushSettingToSupabase('cadence', cadence);
+        pushSettingToSupabase('targets', targets);
+        pushSettingToSupabase('counter', leadCounter);
+      }
+    }
+
+    leads.forEach(migrateLead);
+    leads.forEach(l => {
+      const n = parseInt((l.leadId||'').replace(/[^0-9]/g,''));
+      if (!isNaN(n) && n > leadCounter) leadCounter = n;
+    });
+    saveCounter();
+
+    // Purge bin items older than 30 days
+    const cutoff = Date.now() - 30 * 86400000;
+    const before = bin.length;
+    bin = bin.filter(b => new Date(b.deletedAt).getTime() > cutoff);
+    if (bin.length !== before) saveBin();
+  } catch (e) { console.error(e); leads = []; bin = []; }
+
+  populateStatusDropdowns();
+
+  // Default view: Today if leads exist, else Table
+  currentView = leads.length ? 'today' : 'table';
+  setView(currentView);
+
+  // Daily digest — once per day
+  const today = new Date().toISOString().split('T')[0];
+  if (localStorage.getItem(DIGEST_KEY) !== today && leads.length) {
+    localStorage.setItem(DIGEST_KEY, today);
+    showDigest(false);
+  }
+}
+
+function migrateLead(l) {
+  if (!l.activityLog) l.activityLog = [];
+  if (!l.stageChangedAt) l.stageChangedAt = l.dateReceived || new Date().toISOString().split('T')[0];
+  if (!l.attachments) l.attachments = [];
+  if (!l.handoffChecklist) l.handoffChecklist = [];
+  if (!l.followUps) l.followUps = [{done:false,date:''},{done:false,date:''},{done:false,date:''},{done:false,date:''}];
+  if (!l.tasks) l.tasks = [];
+  if (l.status === 'Qualified') l.status = 'Unqualified';
+  if (l.status === 'Proposal') l.status = 'No Reply';
+  if (!l.leadId) { leadCounter++; l.leadId = 'L' + String(leadCounter).padStart(4,'0'); }
+  // Backfill dateWon for existing won-family leads
+  if (WON_FAMILY.includes(l.status) && !l.dateWon) {
+    const wonEntry = (l.stageHistory||[]).find(h => h.stage === 'Won');
+    l.dateWon = wonEntry ? wonEntry.date : (l.stageChangedAt || l.dateReceived);
+  }
+  // Stage history for analytics: reconstruct minimal if missing
+  if (!l.stageHistory) {
+    l.stageHistory = [{ stage: 'New', date: l.dateReceived || l.stageChangedAt }];
+    if (l.status !== 'New') l.stageHistory.push({ stage: l.status, date: l.stageChangedAt });
+  }
+}
+
+function saveLeads() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(leads)); }
+  catch (e) {
+    if ((e.message||'').toLowerCase().includes('quota')) alert('⚠️ Storage full. Export to Excel and remove old/attachment-heavy leads.');
+    else console.error(e);
+  }
+  pushLeadsToSupabase();
+}
+function saveBin() { try { localStorage.setItem(BIN_KEY, JSON.stringify(bin)); } catch(e) { console.error(e); } pushBinToSupabase(); }
+function saveCounter() { localStorage.setItem(COUNTER_KEY, String(leadCounter)); pushSettingToSupabase('counter', leadCounter); }
+function nextLeadId() { leadCounter++; saveCounter(); return 'L' + String(leadCounter).padStart(4,'0'); }
+
+function recordStageChange(lead, newStage) {
+  lead.stageHistory = lead.stageHistory || [];
+  lead.stageHistory.push({ stage: newStage, date: new Date().toISOString().split('T')[0] });
+}
+
+function populateStatusDropdowns() {
+  const opts = ALL_STATUSES.map(s => `<option>${s}</option>`).join('');
+  document.getElementById('statusFilter').innerHTML = '<option value="">All Statuses</option>' + opts;
+  document.getElementById('f_status').innerHTML = opts;
+  document.getElementById('bulkStatusSelect').innerHTML = '<option value="">Change Status…</option>' + opts;
+}
+
+// ============ FOLLOW-UPS & SCORING ============
+function computeLastFollowUp(lead) {
+  if (!lead.followUps) return '';
+  const done = lead.followUps.filter(f => f.done && f.date).map(f => f.date).sort();
+  return done.length ? done[done.length - 1] : '';
+}
+function countFollowUps(lead) { return (lead.followUps || []).filter(f => f.done).length; }
+
+function calculateScore(lead) {
+  let score = 0;
+  const val = parseFloat(lead.estimatedValue) || 0;
+  let valPct = 0;
+  if (val >= 5000) valPct = 1.0; else if (val >= 3000) valPct = 0.73; else if (val >= 1500) valPct = 0.50; else if (val >= 500) valPct = 0.27;
+  score += weights.value * valPct;
+  const vol = parseFloat(lead.volume) || 0;
+  let volPct = 0;
+  if (vol >= 5000) volPct = 1.0; else if (vol >= 2000) volPct = 0.70; else if (vol >= 500) volPct = 0.40; else if (vol > 0) volPct = 0.20;
+  score += weights.volume * volPct;
+  const highFit = ['SFP (Seller Fulfilled Prime)','TikTok Live Studio','Multi-channel'];
+  const medFit = ['FBA Prep','DTC Fulfilment'];
+  let svcPct = 0;
+  if (highFit.includes(lead.serviceInterest)) svcPct = 1.0;
+  else if (medFit.includes(lead.serviceInterest)) svcPct = 0.60;
+  else if (lead.serviceInterest) svcPct = 0.30;
+  score += weights.service * svcPct;
+  const topSrc = ['Referral','Existing Client'];
+  const goodSrc = ['Website Form','LinkedIn','Amazon Seller Forum'];
+  let srcPct = 0;
+  if (topSrc.includes(lead.source)) srcPct = 1.0;
+  else if (goodSrc.includes(lead.source)) srcPct = 0.67;
+  else if (lead.source) srcPct = 0.33;
+  score += weights.source * srcPct;
+  let priPct = 0;
+  if (lead.priority === 'High') priPct = 1.0; else if (lead.priority === 'Medium') priPct = 0.50;
+  score += weights.priority * priPct;
+  const stageBoost = { 'Negotiation': 1.0, 'Contacted': 0.6, 'Won': 0.5 };
+  score += weights.stage * (stageBoost[lead.status] || 0);
+  if (weights.stalePenalty > 0 && !['Won','Lost','Unqualified','No Reply'].includes(lead.status)) {
+    const d = daysBetween(lead.stageChangedAt || lead.dateReceived);
+    if (d > 60) score -= weights.stalePenalty;
+    else if (d > 30) score -= weights.stalePenalty * 0.5;
+  }
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function scoreClass(s) { if (s >= 80) return 'score-hot'; if (s >= 60) return 'score-warm'; if (s >= 40) return 'score-cool'; return 'score-cold'; }
+function daysBetween(d) { if (!d) return null; const x = new Date(d); if (isNaN(x)) return null; const t = new Date(); t.setHours(0,0,0,0); x.setHours(0,0,0,0); return Math.floor((t - x)/86400000); }
+function addDays(dateStr, n) { const d = dateStr ? new Date(dateStr) : new Date(); d.setDate(d.getDate() + n); return d.toISOString().split('T')[0]; }
+const FOLLOWUP_STATUSES = ['New', 'Contacted', 'Negotiation', 'Won', 'Onboarding']; // statuses where follow-up alerts apply (Completed is at rest)
+function needsFollowUp(l) { return FOLLOWUP_STATUSES.includes(l.status); }
+function stuckThreshold(l) { return l.status === 'Onboarding' ? 30 : 14; }
+function isOverdue(l) { return needsFollowUp(l) && l.nextFollowUp && daysBetween(l.nextFollowUp) > 0; }
+function isDueToday(l) { return needsFollowUp(l) && l.nextFollowUp && daysBetween(l.nextFollowUp) === 0; }
+function isStuck(l) { return needsFollowUp(l) && daysBetween(l.stageChangedAt || l.dateReceived) > stuckThreshold(l); }
+function isActive(l) { return PIPELINE_STATUSES.includes(l.status); }
+function isWonFamily(l) { return WON_FAMILY.includes(l.status); }
+
+// ============ QUICK ACTIONS ============
+function quickDone(id) {
+  const lead = leads.find(l => l.id === id);
+  if (!lead) return;
+  const idx = (lead.followUps || []).findIndex(f => !f.done);
+  const now = new Date().toISOString();
+  const today = new Date().toISOString().split('T')[0];
+
+  if (idx === -1) {
+    // All 4 done already
+    if (PIPELINE_STATUSES.includes(lead.status)) promptNoReply(lead);
+    else alert('All 4 follow-ups are already done for this lead.');
+    return;
+  }
+  lead.followUps[idx] = { done: true, date: today };
+  lead.lastFollowUp = today;
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: now, type: 'followup', text: `Follow-up ${idx+1}: ✓ done (quick action)` });
+
+  if (idx === 3) {
+    // Just completed FU4 — prompt No Reply (pipeline leads only)
+    saveLeads();
+    render();
+    if (PIPELINE_STATUSES.includes(lead.status)) promptNoReply(lead);
+    return;
+  }
+  // Apply cadence
+  const gap = idx === 0 ? cadence.after1 : idx === 1 ? cadence.after2 : cadence.after3;
+  lead.nextFollowUp = addDays(today, gap);
+  lead.activityLog.unshift({ time: now, type: 'cadence', text: `Next follow-up auto-set to ${lead.nextFollowUp} (+${gap}d cadence)` });
+  saveLeads();
+  render();
+}
+
+function promptNoReply(lead) {
+  if (confirm(`All 4 follow-ups are done for ${lead.company} (${lead.leadId}).\n\nMove to "No Reply"?`)) {
+    const now = new Date().toISOString();
+    const old = lead.status;
+    lead.status = 'No Reply';
+    lead.lostReason = lead.lostReason || 'No response — went cold';
+    lead.stageChangedAt = new Date().toISOString().split('T')[0];
+    recordStageChange(lead, 'No Reply');
+    lead.activityLog = lead.activityLog || [];
+    lead.activityLog.unshift({ time: now, type: 'status', text: `Status: ${old} → No Reply — ${lead.lostReason} (after 4 follow-ups)` });
+    saveLeads();
+    render();
+  }
+}
+
+function quickSnooze(id, days) {
+  const lead = leads.find(l => l.id === id);
+  if (!lead) return;
+  lead.nextFollowUp = addDays(null, days);
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'snooze', text: `Snoozed +${days}d → next follow-up ${lead.nextFollowUp}` });
+  saveLeads();
+  render();
+}
+
+function toggleSnoozeMenu(el, e) {
+  e.stopPropagation();
+  document.querySelectorAll('.snooze-menu.open').forEach(m => { if (m !== el.parentElement) m.classList.remove('open'); });
+  el.parentElement.classList.toggle('open');
+}
+document.addEventListener('click', () => document.querySelectorAll('.snooze-menu.open').forEach(m => m.classList.remove('open')));
+
+function quickActionsHtml(l) {
+  return `<div class="quick-actions">
+    <button class="qa-btn qa-done" onclick="event.stopPropagation();quickDone('${l.id}')" title="Mark next follow-up done">✓ Done</button>
+    <span class="snooze-menu">
+      <button class="qa-btn" onclick="toggleSnoozeMenu(this, event)" title="Snooze">⏰</button>
+      <span class="snooze-options">
+        <button onclick="event.stopPropagation();quickSnooze('${l.id}',1)">+1 day</button>
+        <button onclick="event.stopPropagation();quickSnooze('${l.id}',3)">+3 days</button>
+        <button onclick="event.stopPropagation();quickSnooze('${l.id}',7)">+7 days</button>
+      </span>
+    </span>
+    <button class="qa-btn" onclick="event.stopPropagation();openCallLog('${l.id}')" title="Log call">📞</button>
+  </div>`;
+}
+
+// ============ CALL LOG ============
+function openCallLog(id) {
+  callLeadId = id;
+  const lead = leads.find(l => l.id === id);
+  if (!lead) return;
+  document.getElementById('callLeadName').textContent = `${lead.company} (${lead.leadId})`;
+  document.getElementById('callOutcome').value = 'Answered — positive';
+  document.getElementById('callNote').value = '';
+  document.getElementById('callOverlay').classList.add('active');
+}
+function closeCallLog() { document.getElementById('callOverlay').classList.remove('active'); callLeadId = null; }
+function saveCallLog() {
+  const lead = leads.find(l => l.id === callLeadId);
+  if (!lead) return;
+  const outcome = document.getElementById('callOutcome').value;
+  const note = document.getElementById('callNote').value.trim();
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'call', outcome: outcome, text: `📞 Call — ${outcome}${note ? ': ' + note : ''}` });
+  saveLeads();
+  closeCallLog();
+  if (viewingId === lead.id) viewLead(lead.id);
+  render();
+}
+
+// ============ DAILY DIGEST ============
+function showDigest(manual) {
+  const dueToday = leads.filter(isDueToday).length;
+  const overdue = leads.filter(isOverdue).length;
+  const stuck = leads.filter(isStuck).length;
+  const hot = leads.filter(l => l.score >= 80 && isActive(l)).length;
+  let pipeline = 0;
+  leads.forEach(l => { if (isActive(l)) pipeline += parseFloat(l.estimatedValue) || 0; });
+  const lastExport = localStorage.getItem(EXPORT_KEY);
+  const daysSinceExport = lastExport ? daysBetween(lastExport) : null;
+  const lastBackup = localStorage.getItem(BACKUP_KEY);
+  const daysSinceBackup = lastBackup ? daysBetween(lastBackup) : null;
+  let openTaskCount = 0, lateTaskCount = 0;
+  leads.forEach(l => { if (!DEAD_STATUSES.includes(l.status)) { openTaskCount += openTasks(l).length; lateTaskCount += overdueTasks(l).length; } });
+  const tp = computeTargetProgress();
+  const activeTargets = ['leads','wins','revenue','calls'].filter(k => tp[k].target > 0);
+
+  leads.forEach(l => l.score = calculateScore(l));
+
+  document.getElementById('digestContent').innerHTML = `
+    <div class="digest-stat ${overdue?'d-urgent':''}"><span class="d-label">⚠️ Overdue follow-ups</span><span class="d-value">${overdue}</span></div>
+    <div class="digest-stat"><span class="d-label">📅 Due today</span><span class="d-value">${dueToday}</span></div>
+    <div class="digest-stat"><span class="d-label">⏰ Stuck (14d / 30d onboarding)</span><span class="d-value">${stuck}</span></div>
+    <div class="digest-stat ${lateTaskCount?'d-urgent':''}"><span class="d-label">☑ Open tasks</span><span class="d-value">${openTaskCount}${lateTaskCount ? ' (' + lateTaskCount + ' overdue)' : ''}</span></div>
+    <div class="digest-stat"><span class="d-label">🔥 Hot leads (80+)</span><span class="d-value">${hot}</span></div>
+    <div class="digest-stat"><span class="d-label">💰 Active pipeline</span><span class="d-value">£${Math.round(pipeline).toLocaleString()}/mo</span></div>
+    ${daysSinceExport === null ? '<div class="digest-stat d-urgent"><span class="d-label">💾 Excel backup</span><span class="d-value">Never exported!</span></div>' :
+      daysSinceExport > 7 ? `<div class="digest-stat d-urgent"><span class="d-label">💾 Last backup</span><span class="d-value">${daysSinceExport} days ago ⚠️</span></div>` :
+      `<div class="digest-stat"><span class="d-label">💾 Last Excel export</span><span class="d-value">${daysSinceExport === 0 ? 'Today' : daysSinceExport + 'd ago'} ✓</span></div>`}
+    ${daysSinceBackup === null ? '<div class="digest-stat d-urgent"><span class="d-label">🗄️ Full backup</span><span class="d-value">Never!</span></div>' :
+      daysSinceBackup > 7 ? `<div class="digest-stat d-urgent"><span class="d-label">🗄️ Last full backup</span><span class="d-value">${daysSinceBackup} days ago ⚠️</span></div>` :
+      `<div class="digest-stat"><span class="d-label">🗄️ Last full backup</span><span class="d-value">${daysSinceBackup === 0 ? 'Today' : daysSinceBackup + 'd ago'} ✓</span></div>`}
+    ${activeTargets.length ? `<div style="margin-top:14px;padding-top:12px;border-top:2px solid #e2e8f0"><div style="font-size:11px;text-transform:uppercase;letter-spacing:0.4px;color:#64748b;font-weight:700;margin-bottom:8px">Targets</div>
+      ${activeTargets.map(k => {
+        const t = tp[k];
+        const label = { leads: 'New leads', wins: 'Deals won', revenue: 'Won revenue', calls: 'Calls' }[k];
+        const pct = t.actual / t.target * 100;
+        const fmt = v => t.unit === '£' ? '£' + Math.round(v).toLocaleString() : Math.round(v).toLocaleString();
+        const behind = pct < t.pacePct * 100 - 5;
+        return `<div class="digest-stat"><span class="d-label">${label} <span style="color:#94a3b8">(${t.period})</span></span><span class="d-value" style="color:${pct>=100?'#059669':behind?'#dc2626':'#1e3a5f'}">${fmt(t.actual)} / ${fmt(t.target)} · ${pct.toFixed(0)}%</span></div>`;
+      }).join('')}</div>` : ''}
+  `;
+  document.getElementById('digestOverlay').classList.add('active');
+}
+function closeDigest() { document.getElementById('digestOverlay').classList.remove('active'); }
+
+function renderBackupBanner() {
+  const lastBackup = localStorage.getItem(BACKUP_KEY);
+  const days = lastBackup ? daysBetween(lastBackup) : null;
+  const banner = document.getElementById('backupBanner');
+  if (leads.length > 0 && (days === null || days > 7)) {
+    banner.innerHTML = `🗄️ <strong>Backup reminder:</strong> ${days === null ? 'You have never taken a full backup — if this browser\'s data is cleared, everything is lost.' : `Your last full backup was ${days} days ago.`} <a href="#" onclick="event.preventDefault();openBackup()" style="color:#92400e;text-decoration:underline;font-weight:600">Take a backup now →</a>`;
+    banner.classList.add('active');
+  } else banner.classList.remove('active');
+}
+
+// ============ VIEWS ============
+function setView(view) {
+  currentView = view;
+  ['today','table','kanban','insights'].forEach(v => {
+    document.getElementById(v + 'View').style.display = v === view ? '' : 'none';
+    document.getElementById(v + 'ViewBtn').classList.toggle('active', v === view);
+  });
+  // Filters only relevant for table/kanban
+  document.getElementById('filtersBar').style.display = (view === 'table' || view === 'kanban') ? '' : 'none';
+  document.getElementById('bulkBar').style.display = 'none';
+  render();
+}
+
+function setDatePreset(preset) {
+  const today = new Date();
+  const fromEl = document.getElementById('dateFrom'), toEl = document.getElementById('dateTo');
+  const fmt = d => d.toISOString().split('T')[0];
+  if (preset === 'today') { fromEl.value = fmt(today); toEl.value = fmt(today); }
+  else if (preset === '7d') { const f = new Date(today); f.setDate(f.getDate()-7); fromEl.value = fmt(f); toEl.value = fmt(today); }
+  else if (preset === '30d') { const f = new Date(today); f.setDate(f.getDate()-30); fromEl.value = fmt(f); toEl.value = fmt(today); }
+  else if (preset === 'month') { fromEl.value = fmt(new Date(today.getFullYear(), today.getMonth(), 1)); toEl.value = fmt(today); }
+  else if (preset === 'clear') { fromEl.value = ''; toEl.value = ''; }
+  render();
+}
+
+function getFiltered() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const statusF = document.getElementById('statusFilter').value;
+  const sourceF = document.getElementById('sourceFilter').value;
+  const priorityF = document.getElementById('priorityFilter').value;
+  const alertF = document.getElementById('alertFilter').value;
+  const dateField = document.getElementById('dateFilterField').value;
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  return leads.filter(l => {
+    const matchSearch = !search || [l.contactName, l.company, l.email, l.notes, l.leadId].join(' ').toLowerCase().includes(search);
+    const matchStatus = !statusF || l.status === statusF;
+    const matchSource = !sourceF || l.source === sourceF;
+    const matchPriority = !priorityF || l.priority === priorityF;
+    let matchAlert = true;
+    if (alertF === 'overdue') matchAlert = isOverdue(l);
+    else if (alertF === 'today') matchAlert = isDueToday(l);
+    else if (alertF === 'stuck') matchAlert = isStuck(l);
+    else if (alertF === 'hot') matchAlert = l.score >= 80 && isActive(l);
+    let matchDate = true;
+    if (dateFrom || dateTo) {
+      const v = l[dateField];
+      if (!v) matchDate = false;
+      else {
+        if (dateFrom && v < dateFrom) matchDate = false;
+        if (dateTo && v > dateTo) matchDate = false;
+      }
+    }
+    return matchSearch && matchStatus && matchSource && matchPriority && matchAlert && matchDate;
+  });
+}
+
+function render() {
+  leads.forEach(l => { l.score = calculateScore(l); l.lastFollowUp = computeLastFollowUp(l); });
+  renderAlerts();
+  renderStats();
+  renderBackupBanner();
+  document.getElementById('binCount').textContent = bin.length;
+  if (currentView === 'table') { renderTable(); updateBulkBar(); }
+  else if (currentView === 'kanban') renderKanban();
+  else if (currentView === 'today') renderToday();
+  else if (currentView === 'insights') renderInsights();
+  renderCharts();
+  populateSourceFilter();
+}
+
+function renderAlerts() {
+  const od = leads.filter(isOverdue).length, td = leads.filter(isDueToday).length;
+  const banner = document.getElementById('alertBanner');
+  if (od > 0 || td > 0) {
+    let msg = '⚠️ ';
+    if (od > 0) msg += `<strong>${od} overdue follow-up${od>1?'s':''}</strong>`;
+    if (od > 0 && td > 0) msg += ' · ';
+    if (td > 0) msg += `<strong>${td} due today</strong>`;
+    msg += ' &nbsp; <a href="#" onclick="event.preventDefault();setView(\'today\')" style="color:#991b1b;text-decoration:underline">Open Today view →</a>';
+    banner.innerHTML = msg;
+    banner.classList.add('active');
+  } else banner.classList.remove('active');
+}
+
+function renderStats() {
+  let wonCount = 0, pipelineValue = 0, wonValue = 0, overdueCount = 0, todayCount = 0, stuckCount = 0, hotCount = 0, onboardingCount = 0;
+  leads.forEach(l => {
+    const val = parseFloat(l.estimatedValue) || 0;
+    if (isWonFamily(l)) { wonCount++; wonValue += val; }
+    if (l.status === 'Won' || l.status === 'Onboarding') onboardingCount++;
+    if (isActive(l)) pipelineValue += val;
+    if (isOverdue(l)) overdueCount++;
+    if (isDueToday(l)) todayCount++;
+    if (isStuck(l)) stuckCount++;
+    if (l.score >= 80 && isActive(l)) hotCount++;
+  });
+  const closed = leads.filter(l => isWonFamily(l) || l.status === 'Lost').length;
+  const conv = closed ? ((wonCount / closed) * 100).toFixed(1) : 0;
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-card"><div class="stat-label">Total Leads</div><div class="stat-value">${leads.length}</div></div>
+    <div class="stat-card urgent"><div class="stat-label">Overdue</div><div class="stat-value">${overdueCount}</div></div>
+    <div class="stat-card warning"><div class="stat-label">Due Today</div><div class="stat-value">${todayCount}</div></div>
+    <div class="stat-card warning"><div class="stat-label">Stuck &gt;14d</div><div class="stat-value">${stuckCount}</div></div>
+    <div class="stat-card urgent"><div class="stat-label">🔥 Hot Leads</div><div class="stat-value">${hotCount}</div></div>
+    <div class="stat-card pipeline"><div class="stat-label">Active Pipeline</div><div class="stat-value">£${Math.round(pipelineValue).toLocaleString()}</div><div class="stat-sub">per month</div></div>
+    <div class="stat-card warning"><div class="stat-label">In Onboarding</div><div class="stat-value">${onboardingCount}</div><div class="stat-sub">won → awaiting stock</div></div>
+    <div class="stat-card won"><div class="stat-label">Won Revenue</div><div class="stat-value">£${Math.round(wonValue).toLocaleString()}</div><div class="stat-sub">${wonCount} deals · ${conv}% conv.</div></div>
+  `;
+}
+
+// ============ TODAY VIEW ============
+function renderToday() {
+  const container = document.getElementById('todayView');
+  const used = new Set();
+  const overdueLeads = leads.filter(isOverdue).sort((a,b) => daysBetween(b.nextFollowUp) - daysBetween(a.nextFollowUp));
+  overdueLeads.forEach(l => used.add(l.id));
+  const todayLeads = leads.filter(l => isDueToday(l) && !used.has(l.id)).sort((a,b) => b.score - a.score);
+  todayLeads.forEach(l => used.add(l.id));
+  const scheduleLeads = leads.filter(l => l.score >= 80 && isActive(l) && !l.nextFollowUp && !used.has(l.id)).sort((a,b) => b.score - a.score);
+  scheduleLeads.forEach(l => used.add(l.id));
+  const stuckLeads = leads.filter(l => isStuck(l) && !used.has(l.id)).sort((a,b) => daysBetween(b.stageChangedAt||b.dateReceived) - daysBetween(a.stageChangedAt||a.dateReceived));
+
+  // Tasks (independent of lead-level dedupe — a task is its own action)
+  const lateTasks = [], todayTasks = [];
+  leads.forEach(l => {
+    if (DEAD_STATUSES.includes(l.status)) return;
+    overdueTasks(l).forEach(t => lateTasks.push({ lead: l, task: t }));
+    tasksDueToday(l).forEach(t => todayTasks.push({ lead: l, task: t }));
+  });
+  lateTasks.sort((a,b) => daysBetween(b.task.due) - daysBetween(a.task.due));
+
+  if (!overdueLeads.length && !todayLeads.length && !scheduleLeads.length && !stuckLeads.length && !lateTasks.length && !todayTasks.length) {
+    container.innerHTML = `<div class="today-allclear"><h2>✅ All clear!</h2><p>No overdue follow-ups, nothing due today, no stuck leads.<br>Check the Table view to work your pipeline or add new leads.</p></div>`;
+    return;
+  }
+
+  const itemHtml = (l, metaText) => `
+    <div class="today-item">
+      <div class="today-item-info" onclick="viewLead('${l.id}')">
+        <div class="today-item-title">${esc(l.company)} <span class="lead-id">${esc(l.leadId)}</span> <span class="score-badge ${scoreClass(l.score)}" style="font-size:10px;padding:2px 7px">${l.score}</span></div>
+        <div class="today-item-sub">${esc(l.contactName)}${l.phone ? ' · ' + esc(l.phone) : ''}${l.email ? ' · ' + esc(l.email) : ''}</div>
+        <div class="today-item-meta">${metaText} · ${countFollowUps(l)}/4 FUs${openTasks(l).length ? ' · ' + openTasks(l).length + ' open task' + (openTasks(l).length!==1?'s':'') : ''} · ${esc(l.serviceInterest||'')} · £${(parseFloat(l.estimatedValue)||0).toLocaleString()}/mo</div>
+      </div>
+      ${quickActionsHtml(l)}
+    </div>`;
+
+  const taskItemHtml = (entry, metaText) => `
+    <div class="today-item">
+      <div class="today-item-info" onclick="viewLead('${entry.lead.id}')">
+        <div class="today-item-title">☑ ${esc(entry.task.title)}</div>
+        <div class="today-item-sub">${esc(entry.lead.company)} <span class="lead-id">${esc(entry.lead.leadId)}</span> · ${esc(entry.lead.contactName)}${entry.lead.phone ? ' · ' + esc(entry.lead.phone) : ''}</div>
+        <div class="today-item-meta">${metaText}</div>
+      </div>
+      <div class="quick-actions">
+        <button class="qa-btn qa-done" onclick="event.stopPropagation();toggleTask('${entry.lead.id}','${entry.task.id}')" title="Mark task done">✓ Done</button>
+      </div>
+    </div>`;
+
+  const taskSection = (cls, title, entries, metaFn) => `
+    <div class="today-section ${cls}">
+      <div class="today-section-header"><span>${title}</span><span class="count">${entries.length}</span></div>
+      ${entries.map(e => taskItemHtml(e, metaFn(e))).join('')}
+    </div>`;
+
+  const section = (cls, title, items, metaFn, emptyMsg) => `
+    <div class="today-section ${cls}">
+      <div class="today-section-header"><span>${title}</span><span class="count">${items.length}</span></div>
+      ${items.length ? items.map(l => itemHtml(l, metaFn(l))).join('') : `<div class="today-empty">${emptyMsg}</div>`}
+    </div>`;
+
+  let html = '';
+  if (overdueLeads.length) html += section('sec-overdue', '⚠️ Overdue Follow-ups', overdueLeads, l => `${daysBetween(l.nextFollowUp)}d overdue (was due ${formatDateRaw(l.nextFollowUp)})`, '');
+  if (lateTasks.length) html += taskSection('sec-tasks', '📌 Overdue Tasks', lateTasks, e => `${daysBetween(e.task.due)}d overdue (was due ${formatDateRaw(e.task.due)})`);
+  if (todayLeads.length) html += section('sec-today', '📅 Due Today', todayLeads, l => 'Follow-up due today', '');
+  if (todayTasks.length) html += taskSection('sec-tasks-today', '📌 Tasks Due Today', todayTasks, e => 'Task due today');
+  if (scheduleLeads.length) html += section('sec-schedule', '🔥 Hot Leads — No Follow-up Scheduled', scheduleLeads, l => 'Set a next follow-up date', '');
+  if (stuckLeads.length) html += section('sec-stuck', '⏰ Stuck Leads (&gt;14d in stage, &gt;30d in Onboarding)', stuckLeads, l => `${daysBetween(l.stageChangedAt||l.dateReceived)}d in ${l.status}`, '');
+  container.innerHTML = html;
+}
+
+// ============ INSIGHTS VIEW ============
+function renderInsights() {
+  const container = document.getElementById('insightsView');
+
+  // --- Funnel: leads that ever reached each stage ---
+  const reached = {};
+  FUNNEL_ORDER.forEach(s => reached[s] = 0);
+  leads.forEach(l => {
+    const stages = new Set((l.stageHistory||[]).map(h => h.stage));
+    stages.add(l.status);
+    stages.add('New');
+    FUNNEL_ORDER.forEach(s => { if (stages.has(s)) reached[s]++; });
+  });
+  const maxReached = reached['New'] || 1;
+  const funnelColors = { New:'#6366f1', Contacted:'#06b6d4', Negotiation:'#ec4899', Won:'#10b981', Onboarding:'#14b8a6', Completed:'#16a34a' };
+  let funnelHtml = '';
+  FUNNEL_ORDER.forEach((s, i) => {
+    const count = reached[s];
+    const pctOfTotal = (count / maxReached * 100);
+    const prevCount = i > 0 ? reached[FUNNEL_ORDER[i-1]] : count;
+    const convFromPrev = i > 0 && prevCount > 0 ? (count / prevCount * 100).toFixed(0) : null;
+    funnelHtml += `
+      <div class="funnel-stage">
+        <div class="funnel-bar-wrap"><div class="funnel-bar" style="width:${Math.max(pctOfTotal, 12)}%;background:${funnelColors[s]}">${s}: ${count}</div></div>
+        ${convFromPrev !== null ? `<div class="funnel-drop">↓ ${convFromPrev}% converted from ${FUNNEL_ORDER[i-1]} (${prevCount - count} dropped)</div>` : ''}
+      </div>`;
+  });
+
+  // --- Source ROI ---
+  const sourceStats = {};
+  leads.forEach(l => {
+    const s = l.source || 'Unknown';
+    if (!sourceStats[s]) sourceStats[s] = { leads: 0, won: 0, wonValue: 0 };
+    sourceStats[s].leads++;
+    if (isWonFamily(l)) { sourceStats[s].won++; sourceStats[s].wonValue += parseFloat(l.estimatedValue) || 0; }
+  });
+  const roiRows = Object.entries(sourceStats)
+    .map(([s, d]) => ({ source: s, ...d, conv: d.leads ? (d.won/d.leads*100) : 0, avgDeal: d.won ? d.wonValue/d.won : 0 }))
+    .sort((a,b) => b.wonValue - a.wonValue);
+  const roiHtml = `<table class="roi-table"><thead><tr><th>Source</th><th>Leads</th><th>Won</th><th>Conv %</th><th>Avg Deal £</th><th>Total Won £/mo</th></tr></thead><tbody>
+    ${roiRows.map(r => `<tr><td><strong>${esc(r.source)}</strong></td><td>${r.leads}</td><td>${r.won}</td><td>${r.conv.toFixed(0)}%</td><td>£${Math.round(r.avgDeal).toLocaleString()}</td><td><strong>£${Math.round(r.wonValue).toLocaleString()}</strong></td></tr>`).join('')}
+  </tbody></table>`;
+
+  // --- Velocity ---
+  const wonLeads = leads.filter(isWonFamily);
+  const noReplyLeads = leads.filter(l => l.status === 'No Reply');
+  const completedLeads = leads.filter(l => l.status === 'Completed');
+  const avgWonToCompleted = avg(completedLeads.map(l => {
+    const wonDate = l.dateWon || ((l.stageHistory||[]).find(h => h.stage === 'Won')||{}).date;
+    const compEntry = (l.stageHistory||[]).filter(h => h.stage === 'Completed').pop();
+    if (!wonDate || !compEntry) return null;
+    return Math.max(0, Math.floor((new Date(compEntry.date) - new Date(wonDate)) / 86400000));
+  }).filter(v => v !== null));
+  const avgDaysToWin = avg(wonLeads.map(l => {
+    const wonDate = l.dateWon || (((l.stageHistory||[]).find(h => h.stage === 'Won'))||{}).date;
+    if (!wonDate || !l.dateReceived) return null;
+    return Math.max(0, Math.floor((new Date(wonDate) - new Date(l.dateReceived)) / 86400000));
+  }).filter(v => v !== null));
+  const avgFuToClose = avg(wonLeads.map(countFollowUps));
+  const avgFuToNoReply = avg(noReplyLeads.map(countFollowUps));
+  const activeDaysInStage = avg(leads.filter(isActive).map(l => daysBetween(l.stageChangedAt || l.dateReceived)).filter(v => v !== null));
+
+  // --- Calls (last 7 days) ---
+  const weekAgo = Date.now() - 7 * 86400000;
+  const callOutcomes = {};
+  let callsThisWeek = 0;
+  leads.forEach(l => (l.activityLog||[]).forEach(a => {
+    if (a.type === 'call' && new Date(a.time).getTime() > weekAgo) {
+      callsThisWeek++;
+      const o = a.outcome || 'Unknown';
+      callOutcomes[o] = (callOutcomes[o] || 0) + 1;
+    }
+  }));
+  const callsHtml = callsThisWeek ?
+    `<div style="font-size:13px">${Object.entries(callOutcomes).map(([o,c]) => `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f1f5f9"><span>${esc(o)}</span><strong>${c}</strong></div>`).join('')}</div>` :
+    '<div style="color:#94a3b8;text-align:center;padding:20px;font-size:13px">No calls logged this week. Use the 📞 quick action to log calls.</div>';
+
+  container.innerHTML = `
+    <div class="insights-grid">
+      ${targetBoardHtml()}
+      <div class="insights-box">
+        <h3>Conversion Funnel <span style="font-weight:400;text-transform:none;color:#94a3b8">(leads that reached each stage)</span></h3>
+        ${funnelHtml}
+        <p style="font-size:11px;color:#94a3b8;margin-top:8px">Note: stage history is only fully tracked for leads created/updated in this version — accuracy improves over time.</p>
+      </div>
+      <div class="insights-box">
+        <h3>Velocity</h3>
+        <div class="velocity-cards">
+          <div class="velocity-card"><div class="v-num">${avgDaysToWin !== null ? Math.round(avgDaysToWin) + 'd' : '—'}</div><div class="v-label">Avg days to Win</div></div>
+          <div class="velocity-card"><div class="v-num">${avgFuToClose !== null ? avgFuToClose.toFixed(1) : '—'}</div><div class="v-label">Avg FUs to close</div></div>
+          <div class="velocity-card"><div class="v-num">${avgFuToNoReply !== null ? avgFuToNoReply.toFixed(1) : '—'}</div><div class="v-label">Avg FUs before No Reply</div></div>
+          <div class="velocity-card"><div class="v-num">${activeDaysInStage !== null ? Math.round(activeDaysInStage) + 'd' : '—'}</div><div class="v-label">Avg days in current stage (active)</div></div>
+          <div class="velocity-card"><div class="v-num">${avgWonToCompleted !== null ? Math.round(avgWonToCompleted) + 'd' : '—'}</div><div class="v-label">Avg days Won → Completed</div></div>
+        </div>
+        <h3 style="margin-top:20px">📞 Calls This Week: ${callsThisWeek}</h3>
+        ${callsHtml}
+      </div>
+      <div class="insights-box full">
+        <h3>Monthly Trends</h3>
+        <div class="chart-container" style="height:260px"><canvas id="trendsChart"></canvas></div>
+      </div>
+      <div class="insights-box full">
+        <h3>Source ROI</h3>
+        ${roiRows.length ? roiHtml : '<div style="color:#94a3b8;text-align:center;padding:20px;font-size:13px">No data yet.</div>'}
+      </div>
+      <div class="insights-box full" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div><h3 style="margin-bottom:4px">Weekly Report</h3><p style="font-size:13px;color:#64748b">New leads, calls, follow-ups, tasks, wins and losses for a week — as Excel or a printable one-pager.</p></div>
+        <button class="btn btn-primary" onclick="openWeekly()">📊 Weekly Report</button>
+      </div>
+      <div class="insights-box full" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+        <div><h3 style="margin-bottom:4px">Win/Loss Review</h3><p style="font-size:13px;color:#64748b">Export closed deals for a period with reasons, values, and time-to-close.</p></div>
+        <button class="btn btn-success" onclick="openReview()">📊 Export Review</button>
+      </div>
+    </div>`;
+
+  renderTrendsChart();
+}
+
+function avg(arr) { const a = arr.filter(v => v !== null && v !== undefined && !isNaN(v)); return a.length ? a.reduce((x,y)=>x+y,0)/a.length : null; }
+
+function renderTrendsChart() {
+  const canvas = document.getElementById('trendsChart');
+  if (!canvas) return;
+  // Build monthly buckets for last 12 months
+  const months = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(d.toISOString().slice(0,7)); // YYYY-MM
+  }
+  const received = {}, won = {}, closed = {};
+  months.forEach(m => { received[m] = 0; won[m] = 0; closed[m] = 0; });
+  leads.forEach(l => {
+    const rm = (l.dateReceived||'').slice(0,7);
+    if (received[rm] !== undefined) received[rm]++;
+    (l.stageHistory||[]).forEach(h => {
+      const hm = (h.date||'').slice(0,7);
+      if (h.stage === 'Won' && won[hm] !== undefined) { won[hm]++; closed[hm] = (closed[hm]||0)+1; }
+      if (h.stage === 'Lost' && closed[hm] !== undefined) closed[hm]++;
+    });
+  });
+  const winRate = months.map(m => closed[m] ? (won[m]/closed[m]*100) : null);
+  if (trendsChart) trendsChart.destroy();
+  trendsChart = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: months.map(m => { const [y,mo] = m.split('-'); return new Date(y, mo-1).toLocaleDateString('en-GB',{month:'short',year:'2-digit'}); }),
+      datasets: [
+        { label: 'Leads received', data: months.map(m => received[m]), backgroundColor: '#2563eb', borderRadius: 4, order: 2 },
+        { label: 'Deals won', data: months.map(m => won[m]), backgroundColor: '#10b981', borderRadius: 4, order: 2 },
+        { label: 'Win rate %', data: winRate, type: 'line', borderColor: '#f59e0b', backgroundColor: '#f59e0b', yAxisID: 'y2', order: 1, spanGaps: true }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 }, title: { display: true, text: 'Count' } },
+        y2: { beginAtZero: true, max: 100, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Win %' } }
+      },
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } }
+    }
+  });
+}
+
+// ============ WIN/LOSS REVIEW EXPORT ============
+function openReview() {
+  const now = new Date();
+  document.getElementById('reviewFrom').value = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+  document.getElementById('reviewTo').value = now.toISOString().split('T')[0];
+  document.getElementById('reviewOverlay').classList.add('active');
+}
+function closeReview() { document.getElementById('reviewOverlay').classList.remove('active'); }
+function exportReview() {
+  const from = document.getElementById('reviewFrom').value;
+  const to = document.getElementById('reviewTo').value;
+  if (!from || !to) { alert('Set both dates'); return; }
+
+  const closedInPeriod = leads.filter(l => {
+    if (![...WON_FAMILY, ...DEAD_STATUSES].includes(l.status)) return false;
+    let d;
+    if (isWonFamily(l)) d = l.dateWon || l.stageChangedAt;
+    else { const entry = (l.stageHistory||[]).filter(h => h.stage === l.status).pop(); d = entry ? entry.date : l.stageChangedAt; }
+    return d >= from && d <= to;
+  });
+  if (!closedInPeriod.length) { alert('No deals closed in this period'); return; }
+
+  const wonRows = [], lostRows = [];
+  closedInPeriod.forEach(l => {
+    let closeDate;
+    if (isWonFamily(l)) closeDate = l.dateWon || l.stageChangedAt;
+    else { const entry = (l.stageHistory||[]).filter(h => h.stage === l.status).pop(); closeDate = entry ? entry.date : l.stageChangedAt; }
+    const daysToClose = l.dateReceived ? Math.max(0, Math.floor((new Date(closeDate) - new Date(l.dateReceived))/86400000)) : '';
+    const base = {
+      'Lead ID': l.leadId, 'Company': l.company, 'Contact': l.contactName,
+      'Source': l.source, 'Service': l.serviceInterest, 'Value £/mo': parseFloat(l.estimatedValue)||0,
+      'Received': l.dateReceived, 'Closed': closeDate, 'Days to Close': daysToClose, 'Follow-ups Used': countFollowUps(l)
+    };
+    if (isWonFamily(l)) wonRows.push({ ...base, 'Current Stage': l.status });
+    else lostRows.push({ ...base, 'Status': l.status, 'Reason': l.lostReason||'', 'Details': l.lostNotes||'' });
+  });
+
+  const wonTotal = wonRows.reduce((s,r) => s + r['Value £/mo'], 0);
+  const lostTotal = lostRows.reduce((s,r) => s + r['Value £/mo'], 0);
+  const summary = [
+    { 'Metric': 'Period', 'Value': `${from} to ${to}` },
+    { 'Metric': 'Deals Won', 'Value': wonRows.length },
+    { 'Metric': 'Won Value £/mo', 'Value': wonTotal },
+    { 'Metric': 'Deals Lost/Dead', 'Value': lostRows.length },
+    { 'Metric': 'Lost Value £/mo', 'Value': lostTotal },
+    { 'Metric': 'Win Rate (of closed)', 'Value': ((wonRows.length/(wonRows.length+lostRows.length))*100).toFixed(1) + '%' }
+  ];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+  if (wonRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wonRows), 'Won');
+  if (lostRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lostRows), 'Lost & Dead');
+  XLSX.writeFile(wb, `pickpackpro_review_${from}_to_${to}.xlsx`);
+  closeReview();
+}
+
+// ============ TABLE ============
+function renderTable() {
+  let filtered = getFiltered();
+  filtered.sort((a, b) => {
+    let av = a[sortField] ?? '', bv = b[sortField] ?? '';
+    if (!isNaN(parseFloat(av)) && !isNaN(parseFloat(bv)) && av !== '' && bv !== '') { av = parseFloat(av); bv = parseFloat(bv); }
+    if (av < bv) return sortAsc ? -1 : 1;
+    if (av > bv) return sortAsc ? 1 : -1;
+    return 0;
+  });
+  const tbody = document.getElementById('tableBody');
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="19"><div class="empty-state"><h3>No leads to show</h3><p>Add a lead, import Excel, or paste an email.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = filtered.map((l, idx) => {
+    const overdue = isOverdue(l), stuck = isStuck(l);
+    const rowClass = (selectedIds.has(l.id) ? 'selected ' : '') + (overdue ? 'overdue' : (stuck ? 'stuck' : ''));
+    const attachCount = (l.attachments || []).length;
+    const fuCount = countFollowUps(l);
+    const fuDots = (l.followUps||[]).map((f,i) => `<span class="followup-dot ${f.done?'done':''}" title="${f.date?'FU'+(i+1)+': '+f.date:'FU'+(i+1)+' — not done'}"></span>`).join('');
+    return `
+    <tr class="${rowClass}">
+      <td><input type="checkbox" ${selectedIds.has(l.id)?'checked':''} onchange="toggleSelect('${l.id}', this.checked)"></td>
+      <td style="color:#94a3b8;font-weight:600">${idx+1}</td>
+      <td><span class="lead-id">${esc(l.leadId)}</span></td>
+      <td><span class="score-badge ${scoreClass(l.score)}">${l.score}</span></td>
+      <td>${formatDate(l.dateReceived)}</td>
+      <td><strong>${esc(l.contactName)}</strong><br><small style="color:#94a3b8">${esc(l.jobTitle||'')}</small></td>
+      <td>${esc(l.company)}<br><small style="color:#94a3b8">${esc(l.productCategory||'')}</small></td>
+      <td><small>${esc(l.email||'')}</small></td>
+      <td>${esc(l.source||'')}</td>
+      <td>${esc(l.serviceInterest||'')}</td>
+      <td>£${(parseFloat(l.estimatedValue)||0).toLocaleString()}</td>
+      <td><span class="status-badge status-${l.status.replace(/\s/g,'')}">${l.status}</span></td>
+      <td class="priority-${l.priority}">${l.priority||''}</td>
+      <td><div class="followup-dots">${fuDots}<span class="followup-count">${fuCount}/4</span></div></td>
+      <td>${l.lastFollowUp ? formatDate(l.lastFollowUp) : '<span style="color:#cbd5e1">—</span>'}</td>
+      <td>${formatDate(l.nextFollowUp)}${overdue?' <span class="overdue-flag">!</span>':''}</td>
+      <td>${needsFollowUp(l) ? quickActionsHtml(l) : '—'}</td>
+      <td style="white-space:nowrap">${attachCount > 0 ? `<span style="background:#e0e7ff;color:#4338ca;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">📎${attachCount}</span> ` : ''}${taskBadgeHtml(l)}${(attachCount === 0 && !openTasks(l).length) ? '—' : ''}</td>
+      <td>
+        <button class="btn btn-view" onclick="viewLead('${l.id}')">View</button>
+        <button class="btn btn-edit" onclick="editLead('${l.id}')">Edit</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+// ============ KANBAN ============
+function renderKanban() {
+  const filtered = getFiltered();
+  const board = document.getElementById('kanbanView');
+  board.innerHTML = KANBAN_ORDER.map(stage => {
+    const stageLeads = filtered.filter(l => l.status === stage).sort((a,b) => b.score - a.score);
+    const stageClass = stage.replace(/\s/g,'');
+    return `
+      <div class="kanban-column col-${stageClass}">
+        <div class="kanban-column-header"><h3>${stage}</h3><span class="count">${stageLeads.length}</span></div>
+        <div class="kanban-cards" data-stage="${stage}" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleDrop(event, '${stage}')">
+          ${stageLeads.map(l => {
+            const overdue = isOverdue(l), stuck = isStuck(l), fuCount = countFollowUps(l);
+            return `
+            <div class="kanban-card priority-${l.priority||'Medium'}" draggable="true" ondragstart="handleDragStart(event, '${l.id}')" ondragend="this.classList.remove('dragging')" onclick="viewLead('${l.id}')">
+              <div style="display:flex;justify-content:space-between;align-items:start;gap:6px">
+                <div style="flex:1">
+                  <div class="kanban-card-company">${esc(l.company)}</div>
+                  <div class="kanban-card-contact">${esc(l.contactName)} · ${esc(l.serviceInterest||'')}</div>
+                </div>
+                <span class="lead-id" style="flex-shrink:0">${esc(l.leadId)}</span>
+              </div>
+              <div class="kanban-card-meta">
+                <span class="score-badge ${scoreClass(l.score)}" style="font-size:11px;padding:2px 8px">${l.score}</span>
+                <span class="kanban-card-value">£${(parseFloat(l.estimatedValue)||0).toLocaleString()}</span>
+              </div>
+              <div class="kanban-card-flags">
+                <span style="font-size:11px;color:#64748b">FU: ${fuCount}/4</span>
+                ${overdue?'<span class="overdue-flag">OVERDUE</span>':''}
+                ${stuck?'<span class="stuck-flag">STUCK</span>':''}
+                ${(l.attachments||[]).length>0?`<span style="background:#e0e7ff;color:#4338ca;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700">📎${l.attachments.length}</span>`:''}
+                ${taskBadgeHtml(l)}
+              </div>
+            </div>`;
+          }).join('')}
+          ${stageLeads.length === 0 ? '<div style="color:#94a3b8;text-align:center;padding:20px;font-size:12px">No leads</div>' : ''}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+let draggedId = null;
+function handleDragStart(e, id) { draggedId = id; e.target.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+function handleDrop(e, newStage) {
+  e.preventDefault();
+  e.currentTarget.classList.remove('drag-over');
+  if (!draggedId) return;
+  const lead = leads.find(l => l.id === draggedId);
+  if (!lead || lead.status === newStage) return;
+  if (DEAD_STATUSES.includes(newStage)) {
+    draggedId = null;
+    openModal(lead);
+    document.getElementById('f_status').value = newStage;
+    handleStatusChange(newStage);
+    alert(`Please set a Reason before saving (status: ${newStage}).`);
+    return;
+  }
+  if (newStage === 'Completed') {
+    const cl = lead.handoffChecklist || [];
+    const open = cl.filter(c => !c.done).length;
+    if (open > 0 && !confirm(`⚠️ ${open} of ${cl.length} handoff checklist items are still unticked for ${lead.company}.\n\nMove to Completed anyway?`)) { draggedId = null; return; }
+  }
+  const oldStatus = lead.status;
+  lead.status = newStage;
+  lead.stageChangedAt = new Date().toISOString().split('T')[0];
+  recordStageChange(lead, newStage);
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'status', text: `Status changed: ${oldStatus} → ${newStage} (kanban)` });
+  if (WON_FAMILY.includes(newStage) && !WON_FAMILY.includes(oldStatus)) {
+    if (!lead.dateWon) lead.dateWon = new Date().toISOString().split('T')[0];
+    lead.activityLog.unshift({ time: new Date().toISOString(), type: 'won', text: `🏆 Deal won — date won: ${lead.dateWon}` });
+  }
+  if (!WON_FAMILY.includes(newStage)) lead.dateWon = '';
+  if (WON_FAMILY.includes(newStage) && (!lead.handoffChecklist || lead.handoffChecklist.length === 0)) {
+    lead.handoffChecklist = HANDOFF_CHECKLIST.map(t => ({ task: t, done: false }));
+    lead.activityLog.unshift({ time: new Date().toISOString(), type: 'handoff', text: '🎉 Won! Handoff checklist generated' });
+  }
+  draggedId = null;
+  saveLeads();
+  render();
+}
+
+// ============ TOP CHARTS ============
+function renderCharts() {
+  if (document.getElementById('chartsRow').offsetParent === null && currentView === 'insights') return;
+  const statusCounts = {}, sourceCounts = {}, lostReasons = {};
+  leads.forEach(l => {
+    statusCounts[l.status] = (statusCounts[l.status] || 0) + 1;
+    if (l.source) sourceCounts[l.source] = (sourceCounts[l.source] || 0) + 1;
+    if (DEAD_STATUSES.includes(l.status) && l.lostReason) lostReasons[l.lostReason] = (lostReasons[l.lostReason] || 0) + 1;
+  });
+  const total = leads.length || 1;
+  const statusColors = { New:'#6366f1', Contacted:'#06b6d4', Negotiation:'#ec4899', Won:'#10b981', Onboarding:'#14b8a6', Completed:'#16a34a', Unqualified:'#f59e0b', 'No Reply':'#94a3b8', Lost:'#ef4444' };
+
+  if (statusChart) statusChart.destroy();
+  statusChart = new Chart(document.getElementById('statusChart'), {
+    type: 'doughnut',
+    data: {
+      labels: Object.keys(statusCounts).map(s => `${s}: ${statusCounts[s]} (${(statusCounts[s]/total*100).toFixed(0)}%)`),
+      datasets: [{ data: Object.values(statusCounts), backgroundColor: Object.keys(statusCounts).map(s => statusColors[s] || '#94a3b8') }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.label.split(':')[0]}: ${ctx.parsed} leads (${(ctx.parsed/total*100).toFixed(1)}%)` } }
+      }
+    }
+  });
+
+  if (sourceChart) sourceChart.destroy();
+  sourceChart = new Chart(document.getElementById('sourceChart'), {
+    type: 'bar',
+    data: { labels: Object.keys(sourceCounts), datasets: [{ data: Object.values(sourceCounts), backgroundColor: '#2563eb', borderRadius: 6 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+
+  const buckets = { 'Overdue': 0, 'Today': 0, 'Tomorrow': 0, 'This Week': 0, 'Next Week': 0, 'Later': 0, 'No Date': 0 };
+  leads.forEach(l => {
+    if (!needsFollowUp(l)) return;
+    if (l.status === 'Won' || l.status === 'Onboarding') { if (!l.nextFollowUp) return; } // won-family without FU date: not "No Date" noise
+    if (!l.nextFollowUp) { buckets['No Date']++; return; }
+    const d = daysBetween(l.nextFollowUp);
+    if (d > 0) buckets['Overdue']++;
+    else if (d === 0) buckets['Today']++;
+    else if (d === -1) buckets['Tomorrow']++;
+    else if (d >= -7) buckets['This Week']++;
+    else if (d >= -14) buckets['Next Week']++;
+    else buckets['Later']++;
+  });
+  const bucketColors = { 'Overdue':'#ef4444', 'Today':'#f59e0b', 'Tomorrow':'#eab308', 'This Week':'#3b82f6', 'Next Week':'#6366f1', 'Later':'#94a3b8', 'No Date':'#cbd5e1' };
+  if (followupChart) followupChart.destroy();
+  followupChart = new Chart(document.getElementById('followupChart'), {
+    type: 'bar',
+    data: { labels: Object.keys(buckets), datasets: [{ data: Object.values(buckets), backgroundColor: Object.keys(buckets).map(b => bucketColors[b]), borderRadius: 6 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.parsed.y} lead${ctx.parsed.y!==1?'s':''}` } } },
+      scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } }, x: { ticks: { font: { size: 10 } } } },
+      onClick: (e, els) => {
+        if (!els.length) return;
+        const label = Object.keys(buckets)[els[0].index];
+        setView('table');
+        const af = document.getElementById('alertFilter');
+        if (label === 'Overdue') af.value = 'overdue';
+        else if (label === 'Today') af.value = 'today';
+        else af.value = '';
+        render();
+      }
+    }
+  });
+
+  if (lostChart) lostChart.destroy();
+  const lostLabels = Object.keys(lostReasons);
+  const lostBox = document.getElementById('lostChartBox');
+  if (lostLabels.length > 0) {
+    lostBox.innerHTML = '<h3>Why We Lose</h3><div class="chart-container"><canvas id="lostChart"></canvas></div>';
+    lostChart = new Chart(document.getElementById('lostChart'), {
+      type: 'bar',
+      data: { labels: lostLabels, datasets: [{ data: Object.values(lostReasons), backgroundColor: '#ef4444', borderRadius: 6 }] },
+      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, ticks: { stepSize: 1 } } } }
+    });
+  } else {
+    lostBox.innerHTML = '<h3>Why We Lose</h3><div style="text-align:center;color:#94a3b8;padding:60px 10px;font-size:13px">No closed-out leads yet.</div>';
+  }
+}
+
+function populateSourceFilter() {
+  const sources = [...new Set(leads.map(l => l.source).filter(Boolean))];
+  const sel = document.getElementById('sourceFilter');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All Sources</option>' + sources.map(s => `<option>${s}</option>`).join('');
+  sel.value = current;
+}
+
+// ============ SELECTION / BULK ============
+function toggleSelect(id, checked) {
+  if (checked) selectedIds.add(id); else selectedIds.delete(id);
+  updateBulkBar();
+  renderTable();
+}
+function toggleSelectAll(checked) {
+  const filtered = getFiltered();
+  if (checked) filtered.forEach(l => selectedIds.add(l.id));
+  else filtered.forEach(l => selectedIds.delete(l.id));
+  renderTable();
+  updateBulkBar();
+}
+function clearSelection() {
+  selectedIds.clear();
+  const cb = document.getElementById('selectAllCheckbox');
+  if (cb) cb.checked = false;
+  renderTable();
+  updateBulkBar();
+}
+function updateBulkBar() {
+  document.getElementById('bulkCount').textContent = selectedIds.size;
+  const bar = document.getElementById('bulkBar');
+  bar.style.display = '';
+  bar.classList.toggle('active', selectedIds.size > 0 && currentView === 'table');
+}
+function bulkDelete() {
+  if (!selectedIds.size) return;
+  if (!confirm(`Move ${selectedIds.size} selected lead${selectedIds.size>1?'s':''} to the Recycle Bin?`)) return;
+  const toDelete = leads.filter(l => selectedIds.has(l.id));
+  toDelete.forEach(l => moveLeadToBin(l));
+  leads = leads.filter(l => !selectedIds.has(l.id));
+  selectedIds.clear();
+  saveLeads();
+  saveBin();
+  render();
+}
+function bulkChangeStatus() {
+  const newStatus = document.getElementById('bulkStatusSelect').value;
+  if (!newStatus) { alert('Select a status'); return; }
+  if (DEAD_STATUSES.includes(newStatus) && !confirm(`Set ${selectedIds.size} lead(s) to "${newStatus}"? Bulk change won't set a Reason — edit individually for full tracking.`)) return;
+  if (newStatus === 'Completed' && !confirm(`Set ${selectedIds.size} lead(s) to "Completed"? Any unticked handoff checklist items will remain — check individually if unsure.`)) return;
+  const now = new Date().toISOString();
+  const today = new Date().toISOString().split('T')[0];
+  leads.forEach(l => {
+    if (selectedIds.has(l.id) && l.status !== newStatus) {
+      const wasWonFamily = WON_FAMILY.includes(l.status);
+      l.activityLog = l.activityLog || [];
+      l.activityLog.unshift({ time: now, type: 'status', text: `Status changed: ${l.status} → ${newStatus} (bulk)` });
+      l.status = newStatus;
+      l.stageChangedAt = today;
+      recordStageChange(l, newStatus);
+      if (WON_FAMILY.includes(newStatus) && !wasWonFamily && !l.dateWon) l.dateWon = today;
+      if (!WON_FAMILY.includes(newStatus)) l.dateWon = '';
+      if (WON_FAMILY.includes(newStatus) && (!l.handoffChecklist || l.handoffChecklist.length === 0)) {
+        l.handoffChecklist = HANDOFF_CHECKLIST.map(t => ({ task: t, done: false }));
+      }
+    }
+  });
+  document.getElementById('bulkStatusSelect').value = '';
+  saveLeads();
+  render();
+}
+function bulkExport() {
+  if (!selectedIds.size) return;
+  exportLeadsToExcel(leads.filter(l => selectedIds.has(l.id)), 'selected');
+}
+
+// ============ RECYCLE BIN ============
+function moveLeadToBin(lead) {
+  lead.deletedAt = new Date().toISOString();
+  bin.unshift(lead);
+}
+function openBin() {
+  renderBin();
+  document.getElementById('binOverlay').classList.add('active');
+}
+function closeBin() { document.getElementById('binOverlay').classList.remove('active'); }
+function renderBin() {
+  const list = document.getElementById('binList');
+  if (!bin.length) { list.innerHTML = '<div style="color:#94a3b8;text-align:center;padding:30px">Bin is empty</div>'; return; }
+  list.innerHTML = bin.map((l, idx) => {
+    const daysLeft = 30 - Math.floor((Date.now() - new Date(l.deletedAt).getTime())/86400000);
+    return `
+    <div class="bin-item">
+      <div>
+        <strong>${esc(l.company)}</strong> <span class="lead-id">${esc(l.leadId)}</span><br>
+        <small style="color:#64748b">${esc(l.contactName)} · ${l.status} · deleted ${formatDateRaw(l.deletedAt.split('T')[0])} · auto-purge in ${daysLeft}d</small>
+      </div>
+      <div style="display:flex;gap:6px">
+        <button class="btn btn-success btn-mini" onclick="restoreFromBin(${idx})">↩ Restore</button>
+        <button class="btn btn-danger btn-mini" onclick="purgeFromBin(${idx})">Delete Forever</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function restoreFromBin(idx) {
+  const lead = bin[idx];
+  if (!lead) return;
+  // Check email conflict on restore
+  if (lead.email && leads.find(l => (l.email||'').toLowerCase().trim() === lead.email.toLowerCase().trim())) {
+    alert(`Cannot restore: a lead with email "${lead.email}" already exists.`);
+    return;
+  }
+  delete lead.deletedAt;
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'restore', text: '↩ Restored from Recycle Bin' });
+  leads.unshift(lead);
+  bin.splice(idx, 1);
+  saveLeads(); saveBin();
+  renderBin();
+  render();
+}
+function purgeFromBin(idx) {
+  if (!confirm('Permanently delete this lead? This cannot be undone.')) return;
+  bin.splice(idx, 1);
+  saveBin();
+  renderBin();
+  render();
+}
+function restoreAllBin() {
+  if (!bin.length) return;
+  let restored = 0, blocked = 0;
+  for (let i = bin.length - 1; i >= 0; i--) {
+    const lead = bin[i];
+    if (lead.email && leads.find(l => (l.email||'').toLowerCase().trim() === lead.email.toLowerCase().trim())) { blocked++; continue; }
+    delete lead.deletedAt;
+    lead.activityLog = lead.activityLog || [];
+    lead.activityLog.unshift({ time: new Date().toISOString(), type: 'restore', text: '↩ Restored from Recycle Bin' });
+    leads.unshift(lead);
+    bin.splice(i, 1);
+    restored++;
+  }
+  saveLeads(); saveBin();
+  renderBin(); render();
+  if (blocked) alert(`Restored ${restored}. ${blocked} blocked (duplicate emails now exist in active leads).`);
+}
+function emptyBin() {
+  if (!bin.length) return;
+  if (!confirm(`Permanently delete all ${bin.length} leads in the bin? This cannot be undone.`)) return;
+  bin = [];
+  saveBin();
+  renderBin();
+  render();
+}
+
+// ============ DUPLICATES ============
+function findDuplicate(email, excludeId = null) {
+  if (!email) return null;
+  const norm = email.toLowerCase().trim();
+  return leads.find(l => l.id !== excludeId && (l.email||'').toLowerCase().trim() === norm);
+}
+function findInBin(email) {
+  if (!email) return null;
+  const norm = email.toLowerCase().trim();
+  return bin.findIndex(l => (l.email||'').toLowerCase().trim() === norm);
+}
+
+// ============ CRUD ============
+function openModal(lead = null) {
+  editingId = lead ? lead.id : null;
+  document.getElementById('modalTitle').textContent = lead ? `Edit Lead — ${lead.leadId}` : 'Add New Lead';
+  FIELDS.forEach(f => {
+    const el = document.getElementById('f_' + f);
+    if (el) el.value = lead ? (lead[f] || '') : '';
+  });
+  document.getElementById('f_leadId').value = lead ? lead.leadId : `L${String(leadCounter+1).padStart(4,'0')} (preview)`;
+  if (!lead) document.getElementById('f_dateReceived').value = new Date().toISOString().split('T')[0];
+
+  const fus = lead ? (lead.followUps || [{done:false,date:''},{done:false,date:''},{done:false,date:''},{done:false,date:''}]) : [{done:false,date:''},{done:false,date:''},{done:false,date:''},{done:false,date:''}];
+  document.getElementById('followupTracker').innerHTML = fus.map((f, i) => `
+    <div class="followup-row">
+      <label><input type="checkbox" id="fu_done_${i}" ${f.done?'checked':''} onchange="handleFuToggle(${i})"> Follow-up ${i+1}</label>
+      <input type="date" id="fu_date_${i}" value="${f.date||''}">
+      <span style="font-size:12px;color:#64748b">${f.done && f.date ? '✓ '+formatDateRaw(f.date) : ''}</span>
+    </div>
+  `).join('');
+
+  handleStatusChange(document.getElementById('f_status').value);
+  document.getElementById('modalOverlay').classList.add('active');
+}
+
+function handleFuToggle(idx) {
+  const cb = document.getElementById('fu_done_' + idx);
+  const dateEl = document.getElementById('fu_date_' + idx);
+  if (cb.checked && !dateEl.value) dateEl.value = new Date().toISOString().split('T')[0];
+}
+
+function handleStatusChange(value) {
+  const dead = DEAD_STATUSES.includes(value);
+  document.getElementById('lostReasonGroup').style.display = dead ? '' : 'none';
+  document.getElementById('lostNotesGroup').style.display = dead ? '' : 'none';
+  const won = WON_FAMILY.includes(value);
+  document.getElementById('dateWonGroup').style.display = won ? '' : 'none';
+  const dwEl = document.getElementById('f_dateWon');
+  if (won && !dwEl.value) dwEl.value = new Date().toISOString().split('T')[0];
+}
+
+function closeModal() { document.getElementById('modalOverlay').classList.remove('active'); editingId = null; }
+
+function saveLead() {
+  const existingLead = editingId ? leads.find(l => l.id === editingId) : null;
+  const lead = { id: editingId || 'L' + Date.now() + Math.random().toString(36).slice(2,5) };
+  FIELDS.forEach(f => {
+    const el = document.getElementById('f_' + f);
+    if (el) lead[f] = el.value;
+  });
+  if (!existingLead) lead.leadId = null; // assigned after validation
+  else lead.leadId = existingLead.leadId;
+
+  if (!lead.contactName || !lead.company) { alert('Contact Name and Company are required'); return; }
+  if (DEAD_STATUSES.includes(lead.status) && !lead.lostReason) { alert('Please select a Reason for this status'); return; }
+  // Stamp dateWon when entering won family
+  if (WON_FAMILY.includes(lead.status) && !lead.dateWon) lead.dateWon = new Date().toISOString().split('T')[0];
+  if (!WON_FAMILY.includes(lead.status)) lead.dateWon = '';
+  // Completed checklist confirmation
+  if (lead.status === 'Completed' && existingLead && existingLead.status !== 'Completed') {
+    const cl = existingLead.handoffChecklist || [];
+    const open = cl.filter(c => !c.done).length;
+    if (open > 0 && !confirm(`⚠️ ${open} of ${cl.length} handoff checklist items are still unticked.\n\nMove to Completed anyway?`)) return;
+  }
+
+  if (!existingLead && lead.email) {
+    const dup = findDuplicate(lead.email);
+    if (dup) {
+      if (confirm(`⚠️ A lead with email "${lead.email}" already exists:\n\n${dup.leadId} — ${dup.contactName} at ${dup.company} (${dup.status})\n\nOK = Open existing\nCancel = Cancel save`)) {
+        closeModal();
+        editLead(dup.id);
+      }
+      return;
+    }
+    // Check bin
+    const binIdx = findInBin(lead.email);
+    if (binIdx >= 0) {
+      if (confirm(`A deleted lead with email "${lead.email}" is in the Recycle Bin (${bin[binIdx].company}).\n\nOK = Restore it instead\nCancel = Cancel`)) {
+        closeModal();
+        restoreFromBin(binIdx);
+      }
+      return;
+    }
+  }
+  if (existingLead && lead.email) {
+    const dup = findDuplicate(lead.email, existingLead.id);
+    if (dup) { alert(`Email "${lead.email}" already belongs to ${dup.leadId} (${dup.contactName}).`); return; }
+  }
+
+  if (!existingLead) lead.leadId = nextLeadId();
+
+  lead.followUps = [];
+  for (let i = 0; i < 4; i++) {
+    const done = document.getElementById('fu_done_' + i).checked;
+    const date = document.getElementById('fu_date_' + i).value;
+    lead.followUps.push({ done, date: done ? (date || new Date().toISOString().split('T')[0]) : date });
+  }
+  lead.lastFollowUp = computeLastFollowUp(lead);
+
+  const now = new Date().toISOString();
+  if (existingLead) {
+    lead.activityLog = existingLead.activityLog || [];
+    lead.attachments = existingLead.attachments || [];
+    lead.handoffChecklist = existingLead.handoffChecklist || [];
+    lead.stageChangedAt = existingLead.stageChangedAt || existingLead.dateReceived;
+    lead.stageHistory = existingLead.stageHistory || [];
+
+    (existingLead.followUps || []).forEach((oldFu, i) => {
+      const newFu = lead.followUps[i];
+      if (oldFu.done !== newFu.done) {
+        lead.activityLog.unshift({ time: now, type: 'followup', text: `Follow-up ${i+1}: ${newFu.done?'✓ done':'↺ unmarked'}${newFu.date?' ('+newFu.date+')':''}` });
+      }
+    });
+
+    if (existingLead.status !== lead.status) {
+      const reasonText = DEAD_STATUSES.includes(lead.status) && lead.lostReason ? ` — ${lead.lostReason}${lead.lostNotes ? ' ('+lead.lostNotes+')' : ''}` : '';
+      lead.activityLog.unshift({ time: now, type: 'status', text: `Status: ${existingLead.status} → ${lead.status}${reasonText}` });
+      lead.stageChangedAt = new Date().toISOString().split('T')[0];
+      lead.stageHistory.push({ stage: lead.status, date: lead.stageChangedAt });
+      if (WON_FAMILY.includes(lead.status) && !WON_FAMILY.includes(existingLead.status)) {
+        lead.activityLog.unshift({ time: now, type: 'won', text: `🏆 Deal won — date won: ${lead.dateWon}` });
+      }
+      if (WON_FAMILY.includes(lead.status) && (!lead.handoffChecklist || lead.handoffChecklist.length === 0)) {
+        lead.handoffChecklist = HANDOFF_CHECKLIST.map(t => ({ task: t, done: false }));
+        lead.activityLog.unshift({ time: now, type: 'handoff', text: '🎉 Won! Handoff checklist generated' });
+      }
+    } else {
+      lead.activityLog.unshift({ time: now, type: 'edit', text: 'Lead details updated' });
+    }
+    leads = leads.map(l => l.id === editingId ? lead : l);
+  } else {
+    lead.activityLog = [{ time: now, type: 'created', text: `Lead created (${lead.leadId}) from ${lead.source}` }];
+    lead.attachments = [];
+    lead.handoffChecklist = WON_FAMILY.includes(lead.status) ? HANDOFF_CHECKLIST.map(t => ({ task: t, done: false })) : [];
+    lead.stageChangedAt = lead.dateReceived || new Date().toISOString().split('T')[0];
+    lead.stageHistory = [{ stage: 'New', date: lead.dateReceived || lead.stageChangedAt }];
+    if (lead.status !== 'New') lead.stageHistory.push({ stage: lead.status, date: lead.stageChangedAt });
+    leads.unshift(lead);
+  }
+  saveLeads();
+  closeModal();
+  render();
+}
+
+function editLead(id) { const l = leads.find(x => x.id === id); if (l) openModal(l); }
+
+function sortBy(field) {
+  if (sortField === field) sortAsc = !sortAsc;
+  else { sortField = field; sortAsc = ['company','contactName','email'].includes(field); }
+  renderTable();
+}
+
+// ============ DETAIL VIEW ============
+function viewLead(id) {
+  const lead = leads.find(l => l.id === id);
+  if (!lead) return;
+  viewingId = id;
+  const daysInStage = daysBetween(lead.stageChangedAt || lead.dateReceived);
+  const overdue = isOverdue(lead);
+  const isWonFam = isWonFamily(lead);
+  const checklist = lead.handoffChecklist || [];
+  const doneCount = checklist.filter(c => c.done).length;
+  const progressPct = checklist.length ? (doneCount / checklist.length) * 100 : 0;
+  const fuCount = countFollowUps(lead);
+
+  document.getElementById('detailContent').innerHTML = `
+    <h2><span class="lead-id" style="font-size:13px;vertical-align:middle">${esc(lead.leadId)}</span> ${esc(lead.contactName)} <span style="font-size:14px;color:#94a3b8;font-weight:400">· ${esc(lead.company)}</span></h2>
+    <div style="margin-bottom:16px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <span class="score-badge ${scoreClass(lead.score)}" style="font-size:14px;padding:6px 12px">Score: ${lead.score}</span>
+      <span class="status-badge status-${lead.status.replace(/\s/g,'')}">${lead.status}</span>
+      <span class="priority-${lead.priority}" style="font-size:12px">● ${lead.priority} Priority</span>
+      ${overdue?'<span class="overdue-flag" style="font-size:11px;padding:4px 8px">⚠️ OVERDUE</span>':''}
+      <span style="font-size:12px;color:#64748b">${daysInStage}d in stage · ${fuCount}/4 follow-ups</span>
+      ${needsFollowUp(lead) ? `<span style="margin-left:auto">${quickActionsHtml(lead)}</span>` : ''}
+    </div>
+    <div class="detail-section">
+      <h3>Contact</h3>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="label">Job Title</div><div class="value">${esc(lead.jobTitle||'—')}</div></div>
+        <div class="detail-item"><div class="label">Email</div><div class="value">${esc(lead.email||'—')}</div></div>
+        <div class="detail-item"><div class="label">Phone</div><div class="value">${esc(lead.phone||'—')}</div></div>
+        <div class="detail-item"><div class="label">Website</div><div class="value">${esc(lead.website||'—')}</div></div>
+        <div class="detail-item"><div class="label">Product Category</div><div class="value">${esc(lead.productCategory||'—')}</div></div>
+        <div class="detail-item"><div class="label">Source</div><div class="value">${esc(lead.source||'—')}</div></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Deal</h3>
+      <div class="detail-grid">
+        <div class="detail-item"><div class="label">Service Interest</div><div class="value">${esc(lead.serviceInterest||'—')}</div></div>
+        <div class="detail-item"><div class="label">Monthly Volume</div><div class="value">${lead.volume?parseInt(lead.volume).toLocaleString()+' units':'—'}</div></div>
+        <div class="detail-item"><div class="label">Estimated Value</div><div class="value">£${(parseFloat(lead.estimatedValue)||0).toLocaleString()}/mo</div></div>
+        <div class="detail-item"><div class="label">Last Follow-up</div><div class="value">${lead.lastFollowUp ? formatDate(lead.lastFollowUp) : '—'}</div></div>
+        <div class="detail-item"><div class="label">Next Follow-up</div><div class="value">${formatDate(lead.nextFollowUp)}</div></div>
+        ${isWonFamily(lead) ? `<div class="detail-item"><div class="label">🏆 Date Won</div><div class="value">${formatDate(lead.dateWon)}</div></div>` : ''}
+        <div class="detail-item"><div class="label">Owner</div><div class="value">${esc(lead.owner||'—')}</div></div>
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>Follow-up History (${fuCount}/4)</h3>
+      <div class="followup-tracker">
+        ${(lead.followUps||[]).map((f,i) => `
+          <div class="followup-row">
+            <label>${f.done?'✓':'○'} Follow-up ${i+1}</label>
+            <div style="font-size:13px;color:#64748b">${f.done && f.date ? formatDate(f.date) : (f.done ? 'Done (no date)' : 'Not yet')}</div>
+            <div></div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>☑ Tasks (${openTasks(lead).length} open)</h3>
+      ${(lead.tasks||[]).length ? (lead.tasks||[]).slice().sort((a,b) => (a.done?1:0)-(b.done?1:0) || (a.due||'9999').localeCompare(b.due||'9999')).map(t => {
+        const late = !t.done && t.due && daysBetween(t.due) > 0;
+        return `<div class="task-item ${t.done?'done':''} ${late?'overdue-task':''}">
+          <input type="checkbox" ${t.done?'checked':''} onchange="toggleTask('${lead.id}','${t.id}')">
+          <label onclick="toggleTask('${lead.id}','${t.id}')">${esc(t.title)}</label>
+          <span class="task-due ${late?'late':''}">${t.due ? (late ? daysBetween(t.due)+'d overdue' : formatDateRaw(t.due)) : 'no due date'}</span>
+          <button class="btn btn-danger btn-mini" onclick="deleteTask('${t.id}')">✕</button>
+        </div>`;
+      }).join('') : '<div style="color:#94a3b8;text-align:center;padding:10px;font-size:13px">No tasks yet</div>'}
+      <div class="task-add">
+        <input type="text" id="newTaskTitle" placeholder="New task, e.g. Send rate card" onkeypress="if(event.key==='Enter')addTask()">
+        <input type="date" id="newTaskDue">
+        <button class="btn btn-primary" onclick="addTask()">Add</button>
+      </div>
+    </div>
+    ${DEAD_STATUSES.includes(lead.status) && lead.lostReason ? `
+    <div class="detail-section">
+      <h3>Why ${lead.status}</h3>
+      <div style="background:#fef2f2;border:1px solid #fecaca;padding:12px;border-radius:8px;font-size:13px">
+        <strong style="color:#991b1b">${esc(lead.lostReason)}</strong>
+        ${lead.lostNotes ? `<div style="margin-top:4px;color:#64748b">${esc(lead.lostNotes)}</div>` : ''}
+      </div>
+    </div>` : ''}
+    ${isWonFam && checklist.length > 0 ? `
+    <div class="detail-section">
+      <h3>🎉 Warehouse Onboarding (${doneCount}/${checklist.length})</h3>
+      <div class="checklist-progress"><div class="checklist-progress-bar" style="width:${progressPct}%"></div></div>
+      ${checklist.map((item, idx) => `
+        <div class="checklist-item ${item.done?'done':''}">
+          <input type="checkbox" id="check_${idx}" ${item.done?'checked':''} onchange="toggleChecklist(${idx})">
+          <label for="check_${idx}">${esc(item.task)}</label>
+        </div>
+      `).join('')}
+    </div>` : ''}
+    ${lead.notes?`<div class="detail-section"><h3>Notes</h3><div style="background:#f8fafc;padding:12px;border-radius:8px;font-size:13px;white-space:pre-wrap">${esc(lead.notes)}</div></div>`:''}
+    <div class="detail-section">
+      <h3>📎 Attachments (${(lead.attachments||[]).length})</h3>
+      <div class="attachments-list">
+        ${(lead.attachments||[]).map((a, idx) => `
+          <div class="attachment-item">
+            <div><strong>📄 ${esc(a.name)}</strong> <span style="color:#94a3b8;font-size:11px">${formatBytes(a.size)}</span></div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-view" onclick="downloadAttachment(${idx})">Download</button>
+              <button class="btn btn-danger" onclick="removeAttachment(${idx})">Remove</button>
+            </div>
+          </div>
+        `).join('')}
+        ${(lead.attachments||[]).length === 0 ? '<div style="color:#94a3b8;text-align:center;padding:8px;font-size:13px">No attachments</div>' : ''}
+      </div>
+      <div class="attach-area" onclick="document.getElementById('attachFileInput').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleAttachDrop(event)">
+        📁 Click or drop files (max 2MB each)
+      </div>
+    </div>
+    <div class="detail-section">
+      <h3>📧 Email Templates</h3>
+      <div class="template-list">
+        <button class="template-btn" onclick="showTemplate('first_reply')"><strong>First Reply</strong><small>Acknowledge inquiry</small></button>
+        <button class="template-btn" onclick="showTemplate('discovery')"><strong>Post-Discovery</strong><small>Recap & next steps</small></button>
+        <button class="template-btn" onclick="showTemplate('proposal')"><strong>Proposal Sent</strong><small>Cover note</small></button>
+        <button class="template-btn" onclick="showTemplate('chase')"><strong>Chase-up</strong><small>Polite nudge</small></button>
+      </div>
+      <div id="emailPreview" style="display:none"></div>
+    </div>
+    <div class="detail-section">
+      <h3>📋 Activity Log</h3>
+      <div class="activity-log">
+        ${(lead.activityLog||[]).length === 0 ? '<div style="color:#94a3b8;text-align:center;padding:10px">No activity yet</div>' :
+          (lead.activityLog||[]).map(a => `<div class="activity-item"><div class="activity-time">${formatDateTime(a.time)}</div><div class="activity-text">${esc(a.text)}</div></div>`).join('')}
+      </div>
+      <div class="add-note">
+        <input type="text" id="newNote" placeholder="Add a note..." onkeypress="if(event.key==='Enter')addNote()">
+        <button class="btn btn-primary" onclick="addNote()">Add</button>
+      </div>
+    </div>
+    <div class="modal-actions" style="flex-wrap:wrap">
+      <button class="btn btn-danger" onclick="deleteLeadFromView()">Delete</button>
+      <button class="btn btn-secondary" onclick="printLead('${lead.id}')">🖨️ Print</button>
+      <button class="btn btn-secondary" onclick="exportLeadCalendar('${lead.id}')">📅 Add to Calendar</button>
+      <button class="btn btn-secondary" onclick="closeDetail()">Close</button>
+      <button class="btn btn-edit" onclick="closeDetail();editLead('${lead.id}')">Edit</button>
+    </div>
+  `;
+  document.getElementById('detailOverlay').classList.add('active');
+}
+
+function closeDetail() { document.getElementById('detailOverlay').classList.remove('active'); viewingId = null; }
+function deleteLeadFromView() {
+  if (!viewingId) return;
+  if (!confirm('Move this lead to the Recycle Bin?')) return;
+  const lead = leads.find(l => l.id === viewingId);
+  if (lead) moveLeadToBin(lead);
+  leads = leads.filter(l => l.id !== viewingId);
+  closeDetail();
+  saveLeads(); saveBin();
+  render();
+}
+function addNote() {
+  const text = document.getElementById('newNote').value.trim();
+  if (!text || !viewingId) return;
+  const lead = leads.find(l => l.id === viewingId);
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'note', text });
+  saveLeads();
+  viewLead(viewingId);
+}
+function toggleChecklist(idx) {
+  const lead = leads.find(l => l.id === viewingId);
+  if (!lead || !lead.handoffChecklist[idx]) return;
+  lead.handoffChecklist[idx].done = !lead.handoffChecklist[idx].done;
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'handoff', text: `Handoff: ${lead.handoffChecklist[idx].done?'✓ Completed':'↺ Reopened'} — ${lead.handoffChecklist[idx].task}` });
+  saveLeads();
+  viewLead(viewingId);
+}
+
+// ============ ATTACHMENTS ============
+function handleAttachDrop(e) { e.preventDefault(); e.currentTarget.classList.remove('drag-over'); processAttachments(e.dataTransfer.files); }
+function handleAttachmentUpload(e) { processAttachments(e.target.files); e.target.value = ''; }
+function processAttachments(files) {
+  if (!viewingId || !files.length) return;
+  const lead = leads.find(l => l.id === viewingId);
+  if (!lead) return;
+  lead.attachments = lead.attachments || [];
+  const MAX = 2 * 1024 * 1024;
+  Array.from(files).forEach(file => {
+    if (file.size > MAX) { alert(`"${file.name}" too large (max 2MB)`); return; }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      lead.attachments.push({ name: file.name, size: file.size, type: file.type, data: e.target.result, uploadedAt: new Date().toISOString() });
+      lead.activityLog = lead.activityLog || [];
+      lead.activityLog.unshift({ time: new Date().toISOString(), type: 'attachment', text: `📎 Attached: ${file.name}` });
+      saveLeads(); viewLead(viewingId);
+    };
+    reader.readAsDataURL(file);
+  });
+}
+function downloadAttachment(idx) {
+  const lead = leads.find(l => l.id === viewingId);
+  const a = lead.attachments[idx];
+  const link = document.createElement('a'); link.href = a.data; link.download = a.name; link.click();
+}
+function removeAttachment(idx) {
+  if (!confirm('Remove this attachment?')) return;
+  const lead = leads.find(l => l.id === viewingId);
+  const name = lead.attachments[idx].name;
+  lead.attachments.splice(idx, 1);
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'attachment', text: `🗑️ Removed: ${name}` });
+  saveLeads(); viewLead(viewingId);
+}
+function formatBytes(b) { if (b<1024) return b+' B'; if (b<1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
+
+// ============ EMAIL TEMPLATES ============
+function showTemplate(type) {
+  const lead = leads.find(l => l.id === viewingId);
+  if (!lead) return;
+  const firstName = (lead.contactName || 'there').split(' ')[0];
+  const templates = {
+    first_reply: { subject: `Re: Your inquiry — Pick Pack Pro`, body: `Hi ${firstName},\n\nThanks for getting in touch about your fulfilment needs${lead.company?' at '+lead.company:''}.\n\nTo put together the most accurate quote, could you share:\n• Current monthly order volume\n• Sales channels (Amazon, Shopify, TikTok Shop, etc.)\n• SKU count and any special handling requirements\n\nHappy to jump on a quick call this week.\n\nBest regards,\nAli\nPick Pack Pro` },
+    discovery: { subject: `Great chat today — next steps`, body: `Hi ${firstName},\n\nReally enjoyed our conversation. Quick recap:\n• Your current setup and pain points\n• ${lead.serviceInterest||'The services'} we'd be a good fit for\n• Volume of ${lead.volume?parseInt(lead.volume).toLocaleString()+' units/month':'[volume]'}\n\nI'll send a tailored proposal by [DATE].\n\nBest,\nAli` },
+    proposal: { subject: `Pick Pack Pro proposal — ${lead.company||'[Company]'}`, body: `Hi ${firstName},\n\nProposal attached. Key highlights:\n• ${lead.serviceInterest||'Tailored fulfilment'} setup\n• Dedicated warehouse manager\n• Transparent per-unit pricing\n\nHolding capacity for 2 weeks while you review.\n\nBest,\nAli` },
+    chase: { subject: `Quick follow-up — ${lead.company||'[Company]'}`, body: `Hi ${firstName},\n\nFloating this back to your inbox — where have you landed on the proposal?\n\n(a) Moving forward — let's onboard\n(b) Need more info\n(c) Timing isn't right\n\nHappy with any answer.\n\nBest,\nAli` }
+  };
+  const t = templates[type];
+  const preview = document.getElementById('emailPreview');
+  preview.style.display = 'block';
+  preview.innerHTML = `<div class="email-preview"><strong>Subject:</strong> ${esc(t.subject)}\n\n${esc(t.body)}</div>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button class="btn btn-primary" onclick='copyTemplate(${JSON.stringify(t.subject)}, ${JSON.stringify(t.body)})'>📋 Copy</button>
+      <button class="btn btn-secondary" onclick='openMailto(${JSON.stringify(lead.email||"")}, ${JSON.stringify(t.subject)}, ${JSON.stringify(t.body)})'>✉️ Open in Email</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('emailPreview').style.display='none'">Close</button>
+    </div>`;
+}
+function copyTemplate(subject, body) {
+  navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`).then(() => { alert('Copied'); logEmailAction(`Email copied: "${subject}"`); });
+}
+function openMailto(email, subject, body) {
+  window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  logEmailAction(`Email drafted: "${subject}"`);
+}
+function logEmailAction(text) {
+  const lead = leads.find(l => l.id === viewingId);
+  if (!lead) return;
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'email', text });
+  saveLeads();
+}
+
+// ============ EMAIL PARSER ============
+function openEmailParser() {
+  document.getElementById('emailContent').value = '';
+  document.getElementById('parserResult').innerHTML = '';
+  document.getElementById('createFromParseBtn').style.display = 'none';
+  parsedLead = null;
+  document.getElementById('parserOverlay').classList.add('active');
+}
+function closeParser() { document.getElementById('parserOverlay').classList.remove('active'); }
+function parseEmail() {
+  const text = document.getElementById('emailContent').value.trim();
+  if (!text) { alert('Paste an email first'); return; }
+  const lead = { dateReceived: new Date().toISOString().split('T')[0], source: 'Email Inquiry', status: 'New', priority: 'Medium', notes: text.substring(0, 1000) };
+
+  const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+  if (emailMatch) lead.email = emailMatch[0];
+  const fromMatch = text.match(/From:\s*"?([^"<\n]+?)"?\s*[<\n]/i);
+  if (fromMatch) { const fn = fromMatch[1].trim(); if (fn && !fn.includes('@')) lead.contactName = fn; }
+  if (!lead.contactName) {
+    const patterns = [/(?:i'm|i am|my name is)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i, /(?:^|\n)\s*(?:thanks|regards|cheers|best),?\s*\n\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)?)/i];
+    for (const p of patterns) { const m = text.match(p); if (m) { lead.contactName = m[1].trim(); break; } }
+  }
+  const phoneMatch = text.match(/(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{2,4}\)?[\s-]?)?\d{3,4}[\s-]?\d{3,4}/);
+  if (phoneMatch && phoneMatch[0].replace(/\D/g,'').length >= 9) lead.phone = phoneMatch[0].trim();
+  const urlMatch = text.match(/(?:https?:\/\/)?(?:www\.)?([\w-]+\.(?:co\.uk|com|net|org|io|shop|store)(?:\/[\w-/]*)?)/i);
+  if (urlMatch) lead.website = urlMatch[0];
+  if (lead.email && !lead.company) {
+    const domain = lead.email.split('@')[1];
+    const generic = ['gmail.com','outlook.com','hotmail.com','yahoo.com','icloud.com','live.com','aol.com'];
+    if (!generic.includes(domain.toLowerCase())) {
+      const base = domain.split('.')[0];
+      lead.company = base.charAt(0).toUpperCase() + base.slice(1);
+    }
+  }
+  const serviceKW = {
+    'SFP (Seller Fulfilled Prime)': ['sfp','seller fulfilled prime'], 'FBA Prep': ['fba prep','fba','amazon prep'],
+    'TikTok Live Studio': ['tiktok live','tiktok shop','live shopping'], 'DTC Fulfilment': ['dtc','direct to consumer','shopify'],
+    'Storage Only': ['storage only'], 'Returns Management': ['returns','reverse logistics'], 'Multi-channel': ['multi-channel','multichannel']
+  };
+  const lower = text.toLowerCase();
+  for (const [s, kw] of Object.entries(serviceKW)) { if (kw.some(k => lower.includes(k))) { lead.serviceInterest = s; break; } }
+  const categoryKW = { 'Beauty & Cosmetics':['beauty','cosmetics','skincare'], 'Supplements & Health':['supplement','vitamin'], 'Fashion & Apparel':['fashion','apparel','clothing'] };
+  for (const [c, kw] of Object.entries(categoryKW)) { if (kw.some(k => lower.includes(k))) { lead.productCategory = c; break; } }
+  const volMatch = text.match(/(\d{1,3}(?:,\d{3})*|\d+k)\s*(?:units?|orders?)/i);
+  if (volMatch) { let v = volMatch[1].replace(/,/g,''); if (v.toLowerCase().endsWith('k')) v = parseInt(v)*1000; lead.volume = v.toString(); }
+
+  parsedLead = lead;
+  const dup = lead.email ? findDuplicate(lead.email) : null;
+  let dupHtml = '';
+  if (dup) dupHtml = `<div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:10px;border-radius:6px;margin-bottom:10px;font-size:13px"><strong>⚠️ Duplicate:</strong> matches ${dup.leadId} (${esc(dup.contactName)} at ${esc(dup.company)}). Creation blocked.</div>`;
+  document.getElementById('parserResult').innerHTML = `
+    ${dupHtml}
+    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:14px;margin-top:14px;font-size:13px">
+      <h4 style="color:#065f46;margin-bottom:8px">✓ Extracted fields</h4>
+      <div><strong>Contact:</strong> ${esc(lead.contactName||'❓ Not detected')}</div>
+      <div><strong>Company:</strong> ${esc(lead.company||'❓ Not detected')}</div>
+      <div><strong>Email:</strong> ${esc(lead.email||'—')}</div>
+      <div><strong>Phone:</strong> ${esc(lead.phone||'—')}</div>
+      <div><strong>Service:</strong> ${esc(lead.serviceInterest||'—')}</div>
+      <div><strong>Category:</strong> ${esc(lead.productCategory||'—')}</div>
+      <div><strong>Volume:</strong> ${lead.volume||'—'}</div>
+    </div>`;
+  if (!dup) document.getElementById('createFromParseBtn').style.display = '';
+}
+function createFromParse() {
+  if (!parsedLead) return;
+  if (parsedLead.email && findDuplicate(parsedLead.email)) { alert('Duplicate — cannot create'); return; }
+  if (!parsedLead.contactName) parsedLead.contactName = '(Unknown — please edit)';
+  if (!parsedLead.company) parsedLead.company = '(Unknown — please edit)';
+  parsedLead.id = 'L' + Date.now();
+  parsedLead.leadId = nextLeadId();
+  parsedLead.activityLog = [{ time: new Date().toISOString(), type: 'created', text: `Lead created (${parsedLead.leadId}) from email parser` }];
+  parsedLead.attachments = [];
+  parsedLead.handoffChecklist = [];
+  parsedLead.stageChangedAt = parsedLead.dateReceived;
+  parsedLead.stageHistory = [{ stage: 'New', date: parsedLead.dateReceived }];
+  parsedLead.followUps = [{done:false,date:''},{done:false,date:''},{done:false,date:''},{done:false,date:''}];
+  leads.unshift(parsedLead);
+  saveLeads();
+  closeParser();
+  render();
+  setTimeout(() => editLead(parsedLead.id), 200);
+}
+
+// ============ SETTINGS ============
+function openSettings() {
+  document.getElementById('c_after1').value = cadence.after1;
+  document.getElementById('c_after2').value = cadence.after2;
+  document.getElementById('c_after3').value = cadence.after3;
+  document.getElementById('t_leads').value = targets.leads;
+  document.getElementById('t_wins').value = targets.wins;
+  document.getElementById('t_revenue').value = targets.revenue;
+  document.getElementById('t_calls').value = targets.calls;
+  document.getElementById('w_value').value = weights.value;
+  document.getElementById('w_volume').value = weights.volume;
+  document.getElementById('w_service').value = weights.service;
+  document.getElementById('w_source').value = weights.source;
+  document.getElementById('w_priority').value = weights.priority;
+  document.getElementById('w_stage').value = weights.stage;
+  document.getElementById('w_stalePenalty').value = weights.stalePenalty;
+  updateWeightSum();
+  ['w_value','w_volume','w_service','w_source','w_priority','w_stage'].forEach(id => {
+    document.getElementById(id).oninput = updateWeightSum;
+  });
+  document.getElementById('settingsOverlay').classList.add('active');
+}
+function updateWeightSum() {
+  const sum = ['w_value','w_volume','w_service','w_source','w_priority','w_stage']
+    .map(id => parseFloat(document.getElementById(id).value)||0).reduce((a,b)=>a+b,0);
+  const el = document.getElementById('weightSum');
+  el.textContent = sum;
+  el.style.color = sum === 100 ? '#10b981' : '#f59e0b';
+}
+function closeSettings() { document.getElementById('settingsOverlay').classList.remove('active'); }
+function saveSettings() {
+  cadence = {
+    after1: Math.max(1, parseInt(document.getElementById('c_after1').value) || 3),
+    after2: Math.max(1, parseInt(document.getElementById('c_after2').value) || 5),
+    after3: Math.max(1, parseInt(document.getElementById('c_after3').value) || 7)
+  };
+  localStorage.setItem(CADENCE_KEY, JSON.stringify(cadence));
+  pushSettingToSupabase('cadence', cadence);
+  targets = {
+    leads: document.getElementById('t_leads').value,
+    wins: document.getElementById('t_wins').value,
+    revenue: document.getElementById('t_revenue').value,
+    calls: document.getElementById('t_calls').value
+  };
+  localStorage.setItem(TARGETS_KEY, JSON.stringify(targets));
+  pushSettingToSupabase('targets', targets);
+  weights = {
+    value: parseFloat(document.getElementById('w_value').value) || 0,
+    volume: parseFloat(document.getElementById('w_volume').value) || 0,
+    service: parseFloat(document.getElementById('w_service').value) || 0,
+    source: parseFloat(document.getElementById('w_source').value) || 0,
+    priority: parseFloat(document.getElementById('w_priority').value) || 0,
+    stage: parseFloat(document.getElementById('w_stage').value) || 0,
+    stalePenalty: parseFloat(document.getElementById('w_stalePenalty').value) || 0
+  };
+  localStorage.setItem(WEIGHTS_KEY, JSON.stringify(weights));
+  pushSettingToSupabase('weights', weights);
+  closeSettings();
+  render();
+}
+function resetWeights() {
+  if (!confirm('Reset scoring weights and cadence to defaults? (Targets are kept.)')) return;
+  weights = { ...DEFAULT_WEIGHTS };
+  cadence = { ...DEFAULT_CADENCE };
+  localStorage.setItem(WEIGHTS_KEY, JSON.stringify(weights));
+  localStorage.setItem(CADENCE_KEY, JSON.stringify(cadence));
+  pushSettingToSupabase('weights', weights);
+  pushSettingToSupabase('cadence', cadence);
+  openSettings();
+  render();
+}
+
+// ============ EXCEL: TEMPLATE, IMPORT + VALIDATION, EXPORT ============
+function downloadTemplate() {
+  const headers = ['Lead ID','Date Received','Date Won','Contact Name','Company','Job Title','Email','Phone','Website','Source','Service Interest','Monthly Volume','Estimated Value','Status','Priority','Next Follow-up','Last Follow-up','Owner','Product Category','FU1 Done','FU1 Date','FU2 Done','FU2 Date','FU3 Done','FU3 Date','FU4 Done','FU4 Date','Lost Reason','Lost Notes','Notes'];
+  const sample = [['','2026-06-15','','Taha Ahmed','Market Defence','Founder','taha@marketdefence.co.uk','+44 7700 900000','marketdefence.co.uk','Referral','FBA Prep','5000','3500','Negotiation','High','2026-06-22','2026-06-18','Ali','Beauty & Cosmetics','TRUE','2026-06-10','TRUE','2026-06-18','','','','','','','Net 14 terms agreed']];
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...sample]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+  XLSX.writeFile(wb, 'pickpackpro_leads_template.xlsx');
+}
+
+function handleFileUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'binary', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+      validateImport(rows);
+    } catch (err) { alert('Import failed: ' + err.message); }
+    event.target.value = '';
+  };
+  reader.readAsBinaryString(file);
+}
+
+function validateImport(rows) {
+  const issues = [];
+  const seen = new Set();
+  const validated = [];
+  const emailRe = /^[\w.+-]+@[\w-]+\.[\w.-]+$/;
+
+  rows.forEach((row, i) => {
+    const rowNum = i + 2; // header is row 1
+    const mapped = mapImportRow(row);
+    if (!mapped.contactName && !mapped.company) {
+      issues.push({ level: 'error', text: `Row ${rowNum}: skipped — no contact name or company` });
+      return;
+    }
+    if (mapped.email) {
+      if (!emailRe.test(mapped.email)) {
+        issues.push({ level: 'warn', text: `Row ${rowNum} (${mapped.company||mapped.contactName}): email "${mapped.email}" looks invalid — imported anyway` });
+      }
+      const norm = mapped.email.toLowerCase().trim();
+      if (seen.has(norm)) {
+        issues.push({ level: 'error', text: `Row ${rowNum}: duplicate email within file ("${mapped.email}") — only first occurrence kept` });
+        return;
+      }
+      seen.add(norm);
+    }
+    if (mapped._rawStatus && mapped._rawStatus !== mapped.status) {
+      issues.push({ level: 'warn', text: `Row ${rowNum}: status "${mapped._rawStatus}" not recognised — set to "${mapped.status}"` });
+    }
+    if (mapped._badDates && mapped._badDates.length) {
+      mapped._badDates.forEach(f => issues.push({ level: 'warn', text: `Row ${rowNum}: invalid date in "${f}" — left blank` }));
+    }
+    validated.push(mapped);
+  });
+
+  pendingImport = validated;
+
+  const newCount = validated.filter(m => !m.email || !findDuplicate(m.email)).length;
+  const updateCount = validated.length - newCount;
+  document.getElementById('validationSummary').innerHTML =
+    `<strong>${validated.length}</strong> rows ready: <strong>${newCount}</strong> new · <strong>${updateCount}</strong> will update existing (matched by email) · <strong>${rows.length - validated.length}</strong> skipped`;
+  document.getElementById('validationReport').innerHTML = issues.length ?
+    issues.map(i => `<div class="validation-item ${i.level==='error'?'v-error':'v-warn'}">${i.level==='error'?'🚫':'⚠️'} ${esc(i.text)}</div>`).join('') :
+    '<div style="color:#059669">✓ No issues found — all rows are clean.</div>';
+  document.getElementById('validationOverlay').classList.add('active');
+}
+
+function cancelImport() {
+  pendingImport = null;
+  document.getElementById('validationOverlay').classList.remove('active');
+}
+
+function confirmImport() {
+  if (!pendingImport) return;
+  let added = 0, updated = 0;
+  const now = new Date().toISOString();
+  pendingImport.forEach(mapped => {
+    delete mapped._rawStatus; delete mapped._badDates;
+    const dup = mapped.email ? findDuplicate(mapped.email) : null;
+    if (dup) {
+      const statusChanged = mapped.status && mapped.status !== dup.status;
+      Object.keys(mapped).forEach(k => {
+        if (mapped[k] !== '' && mapped[k] !== null && mapped[k] !== undefined) {
+          if (k === 'followUps') {
+            if (mapped.followUps.some(f => f.done || f.date)) dup.followUps = mapped.followUps;
+          } else dup[k] = mapped[k];
+        }
+      });
+      dup.activityLog = dup.activityLog || [];
+      dup.activityLog.unshift({ time: now, type: 'imported', text: `Lead updated from Excel import` });
+      if (statusChanged) {
+        dup.stageChangedAt = new Date().toISOString().split('T')[0];
+        recordStageChange(dup, dup.status);
+      }
+      updated++;
+    } else {
+      const nl = mapped;
+      nl.id = 'L' + Date.now() + Math.random().toString(36).slice(2,7);
+      nl.leadId = nextLeadId();
+      nl.activityLog = [{ time: now, type: 'imported', text: `Imported from Excel (${nl.leadId})` }];
+      nl.stageChangedAt = nl.dateReceived || new Date().toISOString().split('T')[0];
+      nl.attachments = [];
+      nl.handoffChecklist = WON_FAMILY.includes(nl.status) ? HANDOFF_CHECKLIST.map(t => ({task:t,done:false})) : [];
+      if (WON_FAMILY.includes(nl.status) && !nl.dateWon) nl.dateWon = nl.stageChangedAt;
+      nl.stageHistory = [{ stage: 'New', date: nl.dateReceived || nl.stageChangedAt }];
+      if (nl.status !== 'New') nl.stageHistory.push({ stage: nl.status, date: nl.stageChangedAt });
+      leads.unshift(nl);
+      added++;
+    }
+  });
+  pendingImport = null;
+  document.getElementById('validationOverlay').classList.remove('active');
+  saveLeads();
+  render();
+  const info = document.getElementById('importInfo');
+  info.innerHTML = `✓ Import complete — <strong>${added}</strong> new · <strong>${updated}</strong> updated`;
+  info.classList.add('active');
+  setTimeout(() => info.classList.remove('active'), 8000);
+}
+
+function mapImportRow(row) {
+  const get = (...keys) => {
+    for (const k of keys) {
+      for (const rk of Object.keys(row)) {
+        if (rk.toLowerCase().replace(/[^a-z0-9]/g,'') === k.toLowerCase().replace(/[^a-z0-9]/g,'')) {
+          return String(row[rk] || '').trim();
+        }
+      }
+    }
+    return '';
+  };
+  const badDates = [];
+  const parseDate = (v, fieldName) => {
+    if (!v) return '';
+    const d = new Date(v);
+    if (isNaN(d)) { if (fieldName) badDates.push(fieldName); return ''; }
+    return d.toISOString().split('T')[0];
+  };
+  const parseBool = (v) => ['true','yes','y','1','✓','done'].includes(String(v).toLowerCase().trim());
+
+  const rawStatus = get('Status','Stage') || 'New';
+  let status = rawStatus;
+  if (status === 'Qualified') status = 'Unqualified';
+  if (status === 'Proposal') status = 'No Reply';
+  if (!ALL_STATUSES.includes(status)) status = 'New';
+
+  const followUps = [];
+  for (let i = 1; i <= 4; i++) {
+    followUps.push({
+      done: parseBool(get(`FU${i} Done`, `Follow-up ${i} Done`, `Followup ${i}`)),
+      date: parseDate(get(`FU${i} Date`, `Follow-up ${i} Date`, `Followup ${i} Date`), `FU${i} Date`)
+    });
+  }
+
+  return {
+    dateReceived: parseDate(get('Date Received','Date','Received'), 'Date Received'),
+    dateWon: parseDate(get('Date Won','Won Date'), 'Date Won'),
+    contactName: get('Contact Name','Name','Contact'),
+    company: get('Company','Company Name','Business'),
+    jobTitle: get('Job Title','Title','Position'),
+    email: get('Email','Email Address'),
+    phone: get('Phone','Phone Number','Mobile'),
+    website: get('Website','URL','Site'),
+    source: get('Source','Lead Source') || 'Email Inquiry',
+    serviceInterest: get('Service Interest','Service','Interest'),
+    volume: get('Monthly Volume','Volume','Orders'),
+    estimatedValue: get('Estimated Value','Value','Deal Value'),
+    status: status,
+    _rawStatus: rawStatus,
+    _badDates: badDates,
+    priority: get('Priority') || 'Medium',
+    nextFollowUp: parseDate(get('Next Follow-up','Follow Up','Next Action'), 'Next Follow-up'),
+    lastFollowUp: parseDate(get('Last Follow-up','Last Followup'), 'Last Follow-up'),
+    owner: get('Owner','Assigned','Rep'),
+    productCategory: get('Product Category','Category','Niche'),
+    notes: get('Notes','Comments','Description'),
+    lostReason: get('Lost Reason','Reason'),
+    lostNotes: get('Lost Notes','Lost Details'),
+    followUps: followUps
+  };
+}
+
+function exportToExcel() {
+  if (!leads.length) { alert('No leads to export'); return; }
+  exportLeadsToExcel(leads, 'all');
+}
+function exportLeadsToExcel(list, suffix) {
+  const data = list.map(l => {
+    const row = {
+      'Lead ID': l.leadId, 'Date Received': l.dateReceived, 'Date Won': l.dateWon || '', 'Contact Name': l.contactName, 'Company': l.company,
+      'Job Title': l.jobTitle, 'Email': l.email, 'Phone': l.phone, 'Website': l.website,
+      'Source': l.source, 'Service Interest': l.serviceInterest, 'Monthly Volume': l.volume,
+      'Estimated Value': l.estimatedValue, 'Status': l.status, 'Priority': l.priority,
+      'Next Follow-up': l.nextFollowUp, 'Last Follow-up': l.lastFollowUp || '',
+      'Owner': l.owner, 'Product Category': l.productCategory,
+      'Lost Reason': l.lostReason || '', 'Lost Notes': l.lostNotes || '',
+      'Score': l.score, 'Days in Stage': daysBetween(l.stageChangedAt || l.dateReceived),
+      'Follow-ups Done': countFollowUps(l), 'Attachments': (l.attachments||[]).length
+    };
+    (l.followUps||[]).forEach((f,i) => {
+      row[`FU${i+1} Done`] = f.done ? 'TRUE' : '';
+      row[`FU${i+1} Date`] = f.date || '';
+    });
+    row['Notes'] = l.notes;
+    return row;
+  });
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Leads');
+  XLSX.writeFile(wb, `pickpackpro_leads_${suffix}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  localStorage.setItem(EXPORT_KEY, new Date().toISOString().split('T')[0]);
+  renderBackupBanner();
+}
+
+
+// ============ TASKS ============
+function openTasks(l) { return (l.tasks || []).filter(t => !t.done); }
+function overdueTasks(l) { return openTasks(l).filter(t => t.due && daysBetween(t.due) > 0); }
+function tasksDueToday(l) { return openTasks(l).filter(t => t.due && daysBetween(t.due) === 0); }
+
+function addTask() {
+  const lead = leads.find(l => l.id === viewingId);
+  if (!lead) return;
+  const titleEl = document.getElementById('newTaskTitle');
+  const dueEl = document.getElementById('newTaskDue');
+  const title = titleEl.value.trim();
+  if (!title) { alert('Enter a task'); return; }
+  lead.tasks = lead.tasks || [];
+  lead.tasks.push({ id: 'T' + Date.now() + Math.random().toString(36).slice(2,5), title, due: dueEl.value || '', done: false, createdAt: new Date().toISOString() });
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'task', text: `\u2795 Task added: ${title}${dueEl.value ? ' (due ' + dueEl.value + ')' : ''}` });
+  saveLeads();
+  viewLead(viewingId);
+}
+
+function toggleTask(leadId, taskId) {
+  const lead = leads.find(l => l.id === leadId);
+  if (!lead) return;
+  const task = (lead.tasks||[]).find(t => t.id === taskId);
+  if (!task) return;
+  task.done = !task.done;
+  task.completedAt = task.done ? new Date().toISOString() : null;
+  lead.activityLog = lead.activityLog || [];
+  lead.activityLog.unshift({ time: new Date().toISOString(), type: 'task', text: `${task.done ? '\u2713 Task completed' : '\u21ba Task reopened'}: ${task.title}` });
+  saveLeads();
+  if (viewingId === leadId) viewLead(leadId);
+  render();
+}
+
+function deleteTask(taskId) {
+  const lead = leads.find(l => l.id === viewingId);
+  if (!lead) return;
+  const task = (lead.tasks||[]).find(t => t.id === taskId);
+  if (!task || !confirm(`Delete task "${task.title}"?`)) return;
+  lead.tasks = lead.tasks.filter(t => t.id !== taskId);
+  saveLeads();
+  viewLead(viewingId);
+}
+
+function taskBadgeHtml(l) {
+  const open = openTasks(l);
+  if (!open.length) return '';
+  const late = open.filter(t => t.due && daysBetween(t.due) > 0).length;
+  return `<span class="task-badge ${late ? 'late' : ''}" title="${open.length} open task${open.length!==1?'s':''}${late ? ', ' + late + ' overdue' : ''}">\u2611 ${open.length}${late ? '!' : ''}</span>`;
+}
+
+// ============ TARGETS ============
+function monthBounds() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0], dayOfMonth: now.getDate(), daysInMonth: end.getDate() };
+}
+function weekBounds(ref) {
+  const now = ref ? new Date(ref) : new Date();
+  const dow = (now.getDay() + 6) % 7; // Monday = 0
+  const mon = new Date(now); mon.setDate(now.getDate() - dow);
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  return { start: mon.toISOString().split('T')[0], end: sun.toISOString().split('T')[0], dayOfWeek: dow + 1 };
+}
+
+function computeTargetProgress() {
+  const m = monthBounds();
+  const w = weekBounds();
+  let newLeads = 0, wins = 0, revenue = 0, calls = 0;
+  leads.forEach(l => {
+    if (l.dateReceived && l.dateReceived >= m.start && l.dateReceived <= m.end) newLeads++;
+    if (isWonFamily(l) && l.dateWon && l.dateWon >= m.start && l.dateWon <= m.end) {
+      wins++;
+      revenue += parseFloat(l.estimatedValue) || 0;
+    }
+    (l.activityLog||[]).forEach(a => {
+      if (a.type === 'call') {
+        const d = (a.time||'').split('T')[0];
+        if (d >= w.start && d <= w.end) calls++;
+      }
+    });
+  });
+  return {
+    leads: { actual: newLeads, target: parseFloat(targets.leads) || 0, pacePct: m.dayOfMonth / m.daysInMonth, period: 'this month', unit: '' },
+    wins: { actual: wins, target: parseFloat(targets.wins) || 0, pacePct: m.dayOfMonth / m.daysInMonth, period: 'this month', unit: '' },
+    revenue: { actual: revenue, target: parseFloat(targets.revenue) || 0, pacePct: m.dayOfMonth / m.daysInMonth, period: 'this month', unit: '\u00a3' },
+    calls: { actual: calls, target: parseFloat(targets.calls) || 0, pacePct: w.dayOfWeek / 7, period: 'this week', unit: '' },
+    _month: m, _week: w
+  };
+}
+
+function targetBoardHtml() {
+  const p = computeTargetProgress();
+  const cards = [
+    { key: 'leads', label: 'New Leads', color: '#2563eb' },
+    { key: 'wins', label: 'Deals Won', color: '#10b981' },
+    { key: 'revenue', label: 'Won Revenue', color: '#8b5cf6' },
+    { key: 'calls', label: 'Calls', color: '#f59e0b' }
+  ].filter(c => p[c.key].target > 0);
+
+  if (!cards.length) {
+    return `<div class="insights-box full"><h3>Monthly Targets</h3><div style="color:#94a3b8;text-align:center;padding:20px;font-size:13px">No targets set. Add them in \u2699\ufe0f Settings \u2192 Monthly Targets to see progress here.</div></div>`;
+  }
+  const fmt = (v, unit) => unit === '\u00a3' ? '\u00a3' + Math.round(v).toLocaleString() : Math.round(v).toLocaleString();
+  return `<div class="insights-box full">
+    <h3>Targets \u2014 ${new Date().toLocaleDateString('en-GB',{month:'long',year:'numeric'})}</h3>
+    <div class="target-grid">
+      ${cards.map(c => {
+        const d = p[c.key];
+        const pct = d.target ? (d.actual / d.target * 100) : 0;
+        const expected = d.target * d.pacePct;
+        const diff = d.actual - expected;
+        const diffPct = d.target ? (diff / d.target * 100) : 0;
+        let paceClass = 'pace-on', paceText = 'On pace';
+        if (diffPct > 5) { paceClass = 'pace-ahead'; paceText = `${Math.abs(diffPct).toFixed(0)}% ahead of pace`; }
+        else if (diffPct < -5) { paceClass = 'pace-behind'; paceText = `${Math.abs(diffPct).toFixed(0)}% behind pace`; }
+        const barColor = diffPct < -5 ? '#f59e0b' : c.color;
+        const remaining = c.key === 'calls' ? `${7 - p._week.dayOfWeek} day${7-p._week.dayOfWeek!==1?'s':''} left this week` : `${p._month.daysInMonth - p._month.dayOfMonth} day${p._month.daysInMonth-p._month.dayOfMonth!==1?'s':''} left`;
+        return `<div class="target-card">
+          <div class="target-head">
+            <span class="target-label">${c.label} <span style="text-transform:none;font-weight:400">/ ${d.period}</span></span>
+            <span class="target-nums">${fmt(d.actual, d.unit)} <span style="color:#94a3b8;font-weight:400">of ${fmt(d.target, d.unit)}</span></span>
+          </div>
+          <div class="target-bar-wrap"><div class="target-bar" style="width:${Math.min(100, pct)}%;background:${pct >= 100 ? '#10b981' : barColor}"></div></div>
+          <div class="target-pace ${pct >= 100 ? 'pace-ahead' : paceClass}">${pct >= 100 ? '\u2713 Target hit \u2014 ' + pct.toFixed(0) + '%' : pct.toFixed(0) + '% \u00b7 ' + paceText} \u00b7 <span style="color:#94a3b8;font-weight:400">${remaining}</span></div>
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+// ============ JSON BACKUP & RESTORE ============
+function buildBackupObject(includeAttachments) {
+  const cloneLeads = JSON.parse(JSON.stringify(leads));
+  const cloneBin = JSON.parse(JSON.stringify(bin));
+  if (!includeAttachments) {
+    cloneLeads.forEach(l => { l.attachments = (l.attachments||[]).map(a => ({ name: a.name, size: a.size, type: a.type, uploadedAt: a.uploadedAt, data: null, _stripped: true })); });
+    cloneBin.forEach(l => { l.attachments = (l.attachments||[]).map(a => ({ name: a.name, size: a.size, type: a.type, uploadedAt: a.uploadedAt, data: null, _stripped: true })); });
+  }
+  return {
+    _app: 'PickPackPro Leads Dashboard',
+    _backupVersion: BACKUP_VERSION,
+    _createdAt: new Date().toISOString(),
+    _includesAttachments: !!includeAttachments,
+    leadCount: cloneLeads.length,
+    binCount: cloneBin.length,
+    leads: cloneLeads,
+    bin: cloneBin,
+    leadCounter: leadCounter,
+    weights: weights,
+    cadence: cadence,
+    targets: targets
+  };
+}
+
+function openBackup() {
+  const last = localStorage.getItem(BACKUP_KEY);
+  const days = last ? daysBetween(last) : null;
+  const el = document.getElementById('backupStatus');
+  if (days === null) { el.style.background = '#fef2f2'; el.style.color = '#991b1b'; el.innerHTML = '\u26a0\ufe0f <strong>You have never taken a full backup.</strong> If this browser\u2019s data is cleared, everything is lost.'; }
+  else if (days > 7) { el.style.background = '#fffbeb'; el.style.color = '#92400e'; el.innerHTML = `\u26a0\ufe0f Last full backup was <strong>${days} days ago</strong>.`; }
+  else { el.style.background = '#f0fdf4'; el.style.color = '#065f46'; el.innerHTML = `\u2713 Last full backup: <strong>${days === 0 ? 'today' : days + ' day' + (days!==1?'s':'') + ' ago'}</strong>.`; }
+  updateBackupSizeEstimate();
+  document.getElementById('backupIncludeAttachments').onchange = updateBackupSizeEstimate;
+  document.getElementById('restorePreview').innerHTML = '';
+  pendingRestore = null;
+  document.getElementById('backupOverlay').classList.add('active');
+}
+function closeBackup() { document.getElementById('backupOverlay').classList.remove('active'); pendingRestore = null; }
+
+function updateBackupSizeEstimate() {
+  const inc = document.getElementById('backupIncludeAttachments').checked;
+  let attachBytes = 0, attachCount = 0;
+  [...leads, ...bin].forEach(l => (l.attachments||[]).forEach(a => { attachBytes += a.size || 0; attachCount++; }));
+  const baseSize = JSON.stringify(buildBackupObject(false)).length;
+  const est = inc ? baseSize + attachBytes * 1.37 : baseSize; // base64 overhead
+  const el = document.getElementById('backupSizeEstimate');
+  let msg = `Estimated file size: <strong>${formatBytes(est)}</strong>`;
+  if (attachCount) msg += ` \u00b7 ${attachCount} attachment${attachCount!==1?'s':''} ${inc ? 'included' : 'excluded (metadata only)'}`;
+  if (inc && est > 20 * 1024 * 1024) msg += `<br><span style="color:#dc2626">\u26a0\ufe0f Over 20MB \u2014 consider unticking attachments for a lighter, faster backup. You would still restore all leads and history, just not the files themselves.</span>`;
+  el.innerHTML = msg;
+}
+
+function downloadFullBackup() {
+  const inc = document.getElementById('backupIncludeAttachments').checked;
+  const obj = buildBackupObject(inc);
+  const blob = new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pickpackpro_backup_${new Date().toISOString().split('T')[0]}${inc ? '' : '_nofiles'}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  localStorage.setItem(BACKUP_KEY, new Date().toISOString().split('T')[0]);
+  openBackup();
+  renderBackupBanner();
+}
+
+function handleRestoreFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const obj = JSON.parse(e.target.result);
+      if (!obj || !Array.isArray(obj.leads)) throw new Error('Not a valid Pick Pack Pro backup file');
+      pendingRestore = obj;
+      const created = obj._createdAt ? formatDateTime(obj._createdAt) : 'unknown date';
+      document.getElementById('restorePreview').innerHTML = `
+        <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;padding:14px;margin-top:12px;font-size:13px">
+          <strong style="color:#1e40af">\u2713 Backup file loaded</strong>
+          <div style="margin-top:6px">Created: ${created}</div>
+          <div>Leads: <strong>${obj.leads.length}</strong> \u00b7 Recycle bin: <strong>${(obj.bin||[]).length}</strong></div>
+          <div>Attachments: ${obj._includesAttachments ? 'included' : 'not included (metadata only)'}</div>
+          <div style="margin-top:6px;color:#64748b">You currently have <strong>${leads.length}</strong> leads.</div>
+        </div>
+        <div class="backup-choice">
+          <div class="backup-option" onclick="doRestore('merge')">
+            <strong>\U0001F501 Merge \u2014 add what\u2019s missing</strong>
+            <small>Adds leads from the backup that aren\u2019t already here (matched on Lead ID, then email). Your existing leads are left completely untouched. Safe option \u2014 good for combining work from two computers.</small>
+          </div>
+          <div class="backup-option" style="border-color:#fecaca" onclick="doRestore('replace')">
+            <strong style="color:#991b1b">\u26a0\ufe0f Replace everything</strong>
+            <small>Wipes all current leads, bin, and settings, then restores the backup exactly as it was. Use this on a new computer or to recover from a problem. <strong>This cannot be undone.</strong></small>
+          </div>
+        </div>`;
+    } catch (err) {
+      document.getElementById('restorePreview').innerHTML = `<div style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px;border-radius:8px;margin-top:12px;font-size:13px">\u274c Could not read that file: ${esc(err.message)}</div>`;
+      pendingRestore = null;
+    }
+    event.target.value = '';
+  };
+  reader.readAsText(file);
+}
+
+function doRestore(mode) {
+  if (!pendingRestore) return;
+  const obj = pendingRestore;
+  if (mode === 'replace') {
+    const typed = prompt(`This will PERMANENTLY DELETE your current ${leads.length} leads and replace them with the ${obj.leads.length} leads from the backup.\n\nType REPLACE (in capitals) to confirm:`);
+    if (typed !== 'REPLACE') { alert('Restore cancelled \u2014 nothing was changed.'); return; }
+    leads = obj.leads;
+    bin = obj.bin || [];
+    leadCounter = obj.leadCounter || 0;
+    if (obj.weights) { weights = { ...DEFAULT_WEIGHTS, ...obj.weights }; localStorage.setItem(WEIGHTS_KEY, JSON.stringify(weights)); }
+    if (obj.cadence) { cadence = { ...DEFAULT_CADENCE, ...obj.cadence }; localStorage.setItem(CADENCE_KEY, JSON.stringify(cadence)); }
+    if (obj.targets) { targets = { ...DEFAULT_TARGETS, ...obj.targets }; localStorage.setItem(TARGETS_KEY, JSON.stringify(targets)); }
+    leads.forEach(migrateLead);
+    saveCounter(); saveLeads(); saveBin();
+    closeBackup();
+    render();
+    alert(`\u2713 Restore complete \u2014 ${leads.length} leads restored.`);
+    return;
+  }
+  // MERGE
+  let added = 0, skipped = 0;
+  const byLeadId = new Set(leads.map(l => l.leadId));
+  const byEmail = new Set(leads.map(l => (l.email||'').toLowerCase().trim()).filter(Boolean));
+  obj.leads.forEach(bl => {
+    const emailKey = (bl.email||'').toLowerCase().trim();
+    if (byLeadId.has(bl.leadId) || (emailKey && byEmail.has(emailKey))) { skipped++; return; }
+    if (!bl.id) bl.id = 'L' + Date.now() + Math.random().toString(36).slice(2,7);
+    migrateLead(bl);
+    bl.activityLog = bl.activityLog || [];
+    bl.activityLog.unshift({ time: new Date().toISOString(), type: 'restore', text: '\u2b07\ufe0f Merged in from backup file' });
+    leads.unshift(bl);
+    byLeadId.add(bl.leadId);
+    if (emailKey) byEmail.add(emailKey);
+    added++;
+  });
+  leads.forEach(l => { const n = parseInt((l.leadId||'').replace(/[^0-9]/g,'')); if (!isNaN(n) && n > leadCounter) leadCounter = n; });
+  saveCounter(); saveLeads();
+  closeBackup();
+  render();
+  alert(`\u2713 Merge complete \u2014 ${added} lead${added!==1?'s':''} added, ${skipped} already present (skipped).`);
+}
+
+// ============ CALENDAR (.ics) EXPORT ============
+function icsEscape(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n'); }
+function icsStamp(dateStr, hour, minute) {
+  const d = new Date(dateStr);
+  if (isNaN(d)) return null;
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}T${p(hour)}${p(minute)}00`;
+}
+function icsNowStamp() {
+  const d = new Date();
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth()+1)}${p(d.getUTCDate())}T${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}Z`;
+}
+
+// Builds events at 10:00, stacked in 15-minute slots per day so nothing overlaps
+function buildCalendarEvents(leadList, fromDate) {
+  const slotCounter = {};
+  const events = [];
+  const from = fromDate || new Date().toISOString().split('T')[0];
+
+  const push = (dateStr, summary, description, leadId, kind) => {
+    if (!dateStr) return;
+    // Anything already overdue gets scheduled for today rather than dropped
+    let overdueFlag = false;
+    if (dateStr < from) { overdueFlag = true; dateStr = from; }
+    if (overdueFlag) summary = 'OVERDUE: ' + summary;
+    slotCounter[dateStr] = (slotCounter[dateStr] || 0);
+    const slot = slotCounter[dateStr]++;
+    const totalMin = 10 * 60 + slot * 15;
+    const hour = Math.floor(totalMin / 60), minute = totalMin % 60;
+    const start = icsStamp(dateStr, hour, minute);
+    const endMin = totalMin + 15;
+    const end = icsStamp(dateStr, Math.floor(endMin / 60), endMin % 60);
+    if (!start || !end) return;
+    events.push({ start, end, summary, description, uid: `${leadId}-${kind}-${dateStr}-${slot}@pickpackpro` });
+  };
+
+  leadList.forEach(l => {
+    const contactBits = [
+      `Lead: ${l.leadId}`,
+      `Company: ${l.company||''}`,
+      `Contact: ${l.contactName||''}`,
+      l.phone ? `Phone: ${l.phone}` : '',
+      l.email ? `Email: ${l.email}` : '',
+      l.serviceInterest ? `Service: ${l.serviceInterest}` : '',
+      `Value: \u00a3${(parseFloat(l.estimatedValue)||0).toLocaleString()}/mo`,
+      `Status: ${l.status}`,
+      `Follow-ups done: ${countFollowUps(l)}/4`
+    ].filter(Boolean).join('\n');
+
+    if (needsFollowUp(l) && l.nextFollowUp) {
+      push(l.nextFollowUp, `Follow up: ${l.company||l.contactName}`, contactBits, l.leadId, 'fu');
+    }
+    openTasks(l).forEach(t => {
+      if (t.due) push(t.due, `${t.title} \u2014 ${l.company||l.contactName}`, `Task: ${t.title}\n\n${contactBits}`, l.leadId, 'task-' + t.id);
+    });
+  });
+  return events;
+}
+
+function downloadICS(events, filename) {
+  if (!events.length) { alert('Nothing upcoming to add to your calendar \u2014 no future follow-up dates or task due dates found.'); return; }
+  const lines = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Pick Pack Pro//Leads Dashboard//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  events.forEach(ev => {
+    lines.push('BEGIN:VEVENT');
+    lines.push(`UID:${ev.uid}`);
+    lines.push(`DTSTAMP:${icsNowStamp()}`);
+    lines.push(`DTSTART:${ev.start}`);
+    lines.push(`DTEND:${ev.end}`);
+    lines.push(`SUMMARY:${icsEscape(ev.summary)}`);
+    lines.push(`DESCRIPTION:${icsEscape(ev.description)}`);
+    lines.push('BEGIN:VALARM');
+    lines.push('TRIGGER:-PT1H');
+    lines.push('ACTION:DISPLAY');
+    lines.push(`DESCRIPTION:${icsEscape(ev.summary)}`);
+    lines.push('END:VALARM');
+    lines.push('END:VEVENT');
+  });
+  lines.push('END:VCALENDAR');
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function exportAllCalendar() {
+  const events = buildCalendarEvents(leads);
+  downloadICS(events, `pickpackpro_calendar_${new Date().toISOString().split('T')[0]}.ics`);
+}
+
+function exportLeadCalendar(id) {
+  const lead = leads.find(l => l.id === id);
+  if (!lead) return;
+  const events = buildCalendarEvents([lead]);
+  downloadICS(events, `pickpackpro_${(lead.company||'lead').replace(/[^a-z0-9]/gi,'_')}.ics`);
+}
+
+// ============ PRINT ONE-PAGER ============
+function printLead(id) {
+  const l = leads.find(x => x.id === id);
+  if (!l) return;
+  const openT = openTasks(l);
+  const checklist = l.handoffChecklist || [];
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(l.company)} \u2014 ${esc(l.leadId)}</title>
+  <style>
+    @page { margin: 15mm; }
+    body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a2332; font-size: 12px; line-height: 1.45; }
+    h1 { font-size: 20px; margin: 0 0 2px; }
+    .sub { color: #64748b; font-size: 13px; margin-bottom: 14px; }
+    .bar { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 0; border-top: 2px solid #1e3a5f; border-bottom: 1px solid #cbd5e1; margin-bottom: 14px; font-size: 12px; }
+    .bar b { color: #1e3a5f; }
+    h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #475569; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; margin: 14px 0 7px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 20px; }
+    .row { display: flex; gap: 6px; }
+    .row .k { color: #94a3b8; min-width: 105px; }
+    .row .v { font-weight: 500; }
+    ul { margin: 0; padding-left: 18px; }
+    li { margin-bottom: 3px; }
+    .notes { background: #f8fafc; padding: 8px 10px; border-radius: 5px; white-space: pre-wrap; }
+    .log { font-size: 11px; }
+    .log div { padding: 3px 0; border-bottom: 1px solid #f1f5f9; }
+    .log .t { color: #94a3b8; }
+    .foot { margin-top: 18px; padding-top: 8px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 10px; display: flex; justify-content: space-between; }
+    @media print { .noprint { display: none; } }
+  </style></head><body>
+  <div class="noprint" style="margin-bottom:14px"><button onclick="window.print()" style="padding:8px 16px;font-size:13px;cursor:pointer">\U0001F5A8\ufe0f Print / Save as PDF</button></div>
+  <h1>${esc(l.company)}</h1>
+  <div class="sub">${esc(l.contactName)}${l.jobTitle ? ', ' + esc(l.jobTitle) : ''} \u00b7 ${esc(l.leadId)}</div>
+  <div class="bar">
+    <span><b>Status:</b> ${esc(l.status)}</span>
+    <span><b>Score:</b> ${l.score}</span>
+    <span><b>Priority:</b> ${esc(l.priority||'\u2014')}</span>
+    <span><b>Value:</b> \u00a3${(parseFloat(l.estimatedValue)||0).toLocaleString()}/mo</span>
+    <span><b>Follow-ups:</b> ${countFollowUps(l)}/4</span>
+  </div>
+  <h2>Contact</h2>
+  <div class="grid">
+    <div class="row"><span class="k">Email</span><span class="v">${esc(l.email||'\u2014')}</span></div>
+    <div class="row"><span class="k">Phone</span><span class="v">${esc(l.phone||'\u2014')}</span></div>
+    <div class="row"><span class="k">Website</span><span class="v">${esc(l.website||'\u2014')}</span></div>
+    <div class="row"><span class="k">Category</span><span class="v">${esc(l.productCategory||'\u2014')}</span></div>
+  </div>
+  <h2>Deal</h2>
+  <div class="grid">
+    <div class="row"><span class="k">Service</span><span class="v">${esc(l.serviceInterest||'\u2014')}</span></div>
+    <div class="row"><span class="k">Monthly volume</span><span class="v">${l.volume ? parseInt(l.volume).toLocaleString() + ' units' : '\u2014'}</span></div>
+    <div class="row"><span class="k">Source</span><span class="v">${esc(l.source||'\u2014')}</span></div>
+    <div class="row"><span class="k">Owner</span><span class="v">${esc(l.owner||'\u2014')}</span></div>
+    <div class="row"><span class="k">Date received</span><span class="v">${formatDateRaw(l.dateReceived)||'\u2014'}</span></div>
+    <div class="row"><span class="k">Next follow-up</span><span class="v">${formatDateRaw(l.nextFollowUp)||'\u2014'}</span></div>
+    ${isWonFamily(l) ? `<div class="row"><span class="k">Date won</span><span class="v">${formatDateRaw(l.dateWon)||'\u2014'}</span></div>` : ''}
+    ${DEAD_STATUSES.includes(l.status) && l.lostReason ? `<div class="row"><span class="k">Reason</span><span class="v">${esc(l.lostReason)}</span></div>` : ''}
+  </div>
+  <h2>Follow-up history</h2>
+  <ul>${(l.followUps||[]).map((f,i) => `<li>Follow-up ${i+1}: ${f.done ? '\u2713 ' + (f.date ? formatDateRaw(f.date) : 'done') : 'not yet'}</li>`).join('')}</ul>
+  ${openT.length ? `<h2>Open tasks</h2><ul>${openT.map(t => `<li>${esc(t.title)}${t.due ? ' \u2014 due ' + formatDateRaw(t.due) : ''}</li>`).join('')}</ul>` : ''}
+  ${isWonFamily(l) && checklist.length ? `<h2>Onboarding checklist (${checklist.filter(c=>c.done).length}/${checklist.length})</h2><ul>${checklist.map(c => `<li>${c.done ? '\u2611' : '\u2610'} ${esc(c.task)}</li>`).join('')}</ul>` : ''}
+  ${l.notes ? `<h2>Notes</h2><div class="notes">${esc(l.notes)}</div>` : ''}
+  <h2>Recent activity</h2>
+  <div class="log">${(l.activityLog||[]).slice(0,12).map(a => `<div><span class="t">${formatDateTime(a.time)}</span> \u2014 ${esc(a.text)}</div>`).join('') || '<div>No activity recorded</div>'}</div>
+  <div class="foot"><span>Pick Pack Pro \u2014 Leads Dashboard</span><span>Printed ${new Date().toLocaleDateString('en-GB')}</span></div>
+  </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) { alert('Please allow pop-ups for this page to use printing.'); return; }
+  w.document.write(html);
+  w.document.close();
+}
+
+// ============ WEEKLY REPORT ============
+function openWeekly() {
+  const w = weekBounds();
+  document.getElementById('weeklyFrom').value = w.start;
+  document.getElementById('weeklyTo').value = w.end;
+  document.getElementById('weeklyOverlay').classList.add('active');
+}
+function closeWeekly() { document.getElementById('weeklyOverlay').classList.remove('active'); }
+
+function gatherWeeklyData() {
+  const from = document.getElementById('weeklyFrom').value;
+  const to = document.getElementById('weeklyTo').value;
+  if (!from || !to) { alert('Set both dates'); return null; }
+
+  const inRange = d => d && d >= from && d <= to;
+  const newLeads = leads.filter(l => inRange(l.dateReceived));
+  const wonInPeriod = leads.filter(l => isWonFamily(l) && inRange(l.dateWon));
+  const lostInPeriod = leads.filter(l => {
+    if (!DEAD_STATUSES.includes(l.status)) return false;
+    const entry = (l.stageHistory||[]).filter(h => h.stage === l.status).pop();
+    return inRange(entry ? entry.date : l.stageChangedAt);
+  });
+
+  const callRows = [], fuRows = [], taskRows = [];
+  leads.forEach(l => {
+    (l.activityLog||[]).forEach(a => {
+      const d = (a.time||'').split('T')[0];
+      if (!inRange(d)) return;
+      if (a.type === 'call') callRows.push({ 'Date': d, 'Lead ID': l.leadId, 'Company': l.company, 'Contact': l.contactName, 'Outcome': a.outcome || '', 'Note': (a.text||'').replace(/^\S+\s*Call \u2014 [^:]*:?\s*/, '') });
+      if (a.type === 'followup' && (a.text||'').includes('done')) fuRows.push({ 'Date': d, 'Lead ID': l.leadId, 'Company': l.company, 'Detail': a.text });
+    });
+    (l.tasks||[]).forEach(t => {
+      if (t.done && t.completedAt && inRange(t.completedAt.split('T')[0])) {
+        taskRows.push({ 'Date': t.completedAt.split('T')[0], 'Lead ID': l.leadId, 'Company': l.company, 'Task': t.title, 'Was Due': t.due || '' });
+      }
+    });
+  });
+
+  const movedToOnboarding = leads.filter(l => (l.stageHistory||[]).some(h => h.stage === 'Onboarding' && inRange(h.date))).length;
+  const movedToCompleted = leads.filter(l => (l.stageHistory||[]).some(h => h.stage === 'Completed' && inRange(h.date))).length;
+  const wonValue = wonInPeriod.reduce((s,l) => s + (parseFloat(l.estimatedValue)||0), 0);
+  const lostValue = lostInPeriod.reduce((s,l) => s + (parseFloat(l.estimatedValue)||0), 0);
+  const p = computeTargetProgress();
+
+  return { from, to, newLeads, wonInPeriod, lostInPeriod, callRows, fuRows, taskRows, movedToOnboarding, movedToCompleted, wonValue, lostValue, targets: p };
+}
+
+function exportWeeklyExcel() {
+  const d = gatherWeeklyData();
+  if (!d) return;
+  const summary = [
+    { 'Metric': 'Period', 'Value': `${d.from} to ${d.to}` },
+    { 'Metric': 'New leads received', 'Value': d.newLeads.length },
+    { 'Metric': 'Calls logged', 'Value': d.callRows.length },
+    { 'Metric': 'Follow-ups completed', 'Value': d.fuRows.length },
+    { 'Metric': 'Tasks completed', 'Value': d.taskRows.length },
+    { 'Metric': 'Deals won', 'Value': d.wonInPeriod.length },
+    { 'Metric': 'Won value (\u00a3/mo)', 'Value': Math.round(d.wonValue) },
+    { 'Metric': 'Deals lost / dead', 'Value': d.lostInPeriod.length },
+    { 'Metric': 'Lost value (\u00a3/mo)', 'Value': Math.round(d.lostValue) },
+    { 'Metric': 'Moved to Onboarding', 'Value': d.movedToOnboarding },
+    { 'Metric': 'Moved to Completed', 'Value': d.movedToCompleted }
+  ];
+  ['leads','wins','revenue','calls'].forEach(k => {
+    const t = d.targets[k];
+    if (t.target > 0) {
+      const label = { leads: 'New leads', wins: 'Deals won', revenue: 'Won revenue \u00a3', calls: 'Calls' }[k];
+      summary.push({ 'Metric': `TARGET \u2014 ${label} (${t.period})`, 'Value': `${Math.round(t.actual).toLocaleString()} of ${Math.round(t.target).toLocaleString()} (${t.target ? (t.actual/t.target*100).toFixed(0) : 0}%)` });
+    }
+  });
+
+  const leadRow = l => ({ 'Lead ID': l.leadId, 'Company': l.company, 'Contact': l.contactName, 'Source': l.source, 'Service': l.serviceInterest, 'Value \u00a3/mo': parseFloat(l.estimatedValue)||0, 'Status': l.status, 'Score': l.score });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
+  if (d.newLeads.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.newLeads.map(l => ({ ...leadRow(l), 'Date Received': l.dateReceived }))), 'New Leads');
+  if (d.callRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.callRows), 'Calls');
+  if (d.fuRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.fuRows), 'Follow-ups');
+  if (d.taskRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.taskRows), 'Tasks Done');
+  if (d.wonInPeriod.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.wonInPeriod.map(l => ({ ...leadRow(l), 'Date Won': l.dateWon }))), 'Won');
+  if (d.lostInPeriod.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.lostInPeriod.map(l => ({ ...leadRow(l), 'Reason': l.lostReason||'', 'Details': l.lostNotes||'' }))), 'Lost');
+  XLSX.writeFile(wb, `pickpackpro_weekly_${d.from}_to_${d.to}.xlsx`);
+  closeWeekly();
+}
+
+function printWeeklyReport() {
+  const d = gatherWeeklyData();
+  if (!d) return;
+  const targetRows = ['leads','wins','revenue','calls'].map(k => {
+    const t = d.targets[k];
+    if (!t.target) return '';
+    const label = { leads: 'New leads', wins: 'Deals won', revenue: 'Won revenue', calls: 'Calls' }[k];
+    const pct = t.actual / t.target * 100;
+    const fmt = v => t.unit === '\u00a3' ? '\u00a3' + Math.round(v).toLocaleString() : Math.round(v).toLocaleString();
+    return `<tr><td>${label} <span style="color:#94a3b8">(${t.period})</span></td><td>${fmt(t.actual)} of ${fmt(t.target)}</td><td style="color:${pct>=100?'#059669':pct>=(t.pacePct*100)?'#2563eb':'#dc2626'}">${pct.toFixed(0)}%</td></tr>`;
+  }).join('');
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Weekly Report ${d.from} to ${d.to}</title>
+  <style>
+    @page { margin: 15mm; }
+    body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a2332; font-size: 12px; line-height: 1.45; }
+    h1 { font-size: 20px; margin: 0 0 2px; }
+    .sub { color: #64748b; font-size: 13px; margin-bottom: 16px; }
+    h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #475569; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; margin: 16px 0 8px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 6px; }
+    .kpi { background: #f8fafc; border-radius: 6px; padding: 10px; text-align: center; }
+    .kpi .n { font-size: 20px; font-weight: 700; color: #1e3a5f; }
+    .kpi .l { font-size: 10px; color: #64748b; text-transform: uppercase; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { text-align: left; color: #64748b; font-size: 10px; text-transform: uppercase; padding: 5px 6px; border-bottom: 1px solid #cbd5e1; }
+    td { padding: 5px 6px; border-bottom: 1px solid #f1f5f9; }
+    .foot { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 10px; display: flex; justify-content: space-between; }
+    @media print { .noprint { display: none; } }
+  </style></head><body>
+  <div class="noprint" style="margin-bottom:14px"><button onclick="window.print()" style="padding:8px 16px;font-size:13px;cursor:pointer">\U0001F5A8\ufe0f Print / Save as PDF</button></div>
+  <h1>Weekly Report</h1>
+  <div class="sub">Pick Pack Pro \u00b7 ${formatDateRaw(d.from)} \u2013 ${formatDateRaw(d.to)}</div>
+  <div class="kpis">
+    <div class="kpi"><div class="n">${d.newLeads.length}</div><div class="l">New leads</div></div>
+    <div class="kpi"><div class="n">${d.callRows.length}</div><div class="l">Calls made</div></div>
+    <div class="kpi"><div class="n">${d.fuRows.length}</div><div class="l">Follow-ups</div></div>
+    <div class="kpi"><div class="n">${d.taskRows.length}</div><div class="l">Tasks done</div></div>
+  </div>
+  <div class="kpis">
+    <div class="kpi"><div class="n" style="color:#059669">${d.wonInPeriod.length}</div><div class="l">Deals won</div></div>
+    <div class="kpi"><div class="n" style="color:#059669">\u00a3${Math.round(d.wonValue).toLocaleString()}</div><div class="l">Won \u00a3/mo</div></div>
+    <div class="kpi"><div class="n" style="color:#dc2626">${d.lostInPeriod.length}</div><div class="l">Lost / dead</div></div>
+    <div class="kpi"><div class="n">${d.movedToCompleted}</div><div class="l">Completed</div></div>
+  </div>
+  ${targetRows ? `<h2>Targets</h2><table><thead><tr><th>Target</th><th>Progress</th><th>%</th></tr></thead><tbody>${targetRows}</tbody></table>` : ''}
+  ${d.newLeads.length ? `<h2>New leads (${d.newLeads.length})</h2><table><thead><tr><th>ID</th><th>Company</th><th>Contact</th><th>Source</th><th>Service</th><th>\u00a3/mo</th></tr></thead><tbody>${d.newLeads.map(l => `<tr><td>${esc(l.leadId)}</td><td>${esc(l.company)}</td><td>${esc(l.contactName)}</td><td>${esc(l.source||'')}</td><td>${esc(l.serviceInterest||'')}</td><td>\u00a3${(parseFloat(l.estimatedValue)||0).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : ''}
+  ${d.wonInPeriod.length ? `<h2>Won (${d.wonInPeriod.length})</h2><table><thead><tr><th>ID</th><th>Company</th><th>Service</th><th>Source</th><th>\u00a3/mo</th></tr></thead><tbody>${d.wonInPeriod.map(l => `<tr><td>${esc(l.leadId)}</td><td>${esc(l.company)}</td><td>${esc(l.serviceInterest||'')}</td><td>${esc(l.source||'')}</td><td>\u00a3${(parseFloat(l.estimatedValue)||0).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : ''}
+  ${d.lostInPeriod.length ? `<h2>Lost / dead (${d.lostInPeriod.length})</h2><table><thead><tr><th>ID</th><th>Company</th><th>Status</th><th>Reason</th><th>\u00a3/mo</th></tr></thead><tbody>${d.lostInPeriod.map(l => `<tr><td>${esc(l.leadId)}</td><td>${esc(l.company)}</td><td>${esc(l.status)}</td><td>${esc(l.lostReason||'')}</td><td>\u00a3${(parseFloat(l.estimatedValue)||0).toLocaleString()}</td></tr>`).join('')}</tbody></table>` : ''}
+  ${d.callRows.length ? `<h2>Calls (${d.callRows.length})</h2><table><thead><tr><th>Date</th><th>Company</th><th>Outcome</th></tr></thead><tbody>${d.callRows.map(c => `<tr><td>${formatDateRaw(c['Date'])}</td><td>${esc(c['Company'])}</td><td>${esc(c['Outcome'])}</td></tr>`).join('')}</tbody></table>` : ''}
+  <div class="foot"><span>Pick Pack Pro \u2014 Leads Dashboard</span><span>Generated ${new Date().toLocaleDateString('en-GB')}</span></div>
+  </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) { alert('Please allow pop-ups for this page to use printing.'); return; }
+  w.document.write(html);
+  w.document.close();
+  closeWeekly();
+}
+
+// ============ UTIL ============
+function esc(s) { return String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function formatDate(d) {
+  if (!d) return '<span style="color:#cbd5e1">—</span>';
+  const date = new Date(d);
+  return isNaN(date) ? d : date.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+function formatDateRaw(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  return isNaN(date) ? d : date.toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+}
+function formatDateTime(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  return isNaN(date) ? d : date.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+}
+
+loadAll();
+</script>
+</body>
+</html>
