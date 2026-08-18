@@ -197,6 +197,9 @@
 
   .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 100; align-items: center; justify-content: center; padding: 20px; }
   .modal-overlay.active { display: flex; }
+  .login-overlay { display: none; position: fixed; inset: 0; background: #0f172a; z-index: 200; align-items: center; justify-content: center; padding: 20px; }
+  .login-overlay.active { display: flex; }
+  .login-box { background: white; border-radius: 12px; padding: 32px; max-width: 340px; width: 100%; box-shadow: 0 10px 40px rgba(0,0,0,0.3); }
   .modal { background: white; border-radius: 12px; padding: 24px; max-width: 800px; width: 100%; max-height: 90vh; overflow-y: auto; }
   .modal.modal-sm { max-width: 480px; }
   .modal h2 { margin-bottom: 18px; color: #1e3a5f; }
@@ -321,12 +324,24 @@
 </head>
 <body>
 
+<div class="login-overlay active" id="loginOverlay">
+  <div class="login-box">
+    <h1 style="margin:0 0 4px;font-size:20px">📦 Pick Pack Pro</h1>
+    <p style="margin:0 0 20px;color:#64748b;font-size:14px">Enter the team password to continue</p>
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box">
+    <div id="loginError" style="color:#dc2626;font-size:13px;margin-top:8px;min-height:18px"></div>
+    <button class="btn btn-primary" id="loginBtn" style="width:100%;margin-top:8px;justify-content:center" onclick="handleLogin()">Unlock</button>
+  </div>
+</div>
+<div id="appRoot" style="display:none">
+
 <div class="header">
   <div>
     <h1>📦 Pick Pack Pro — Leads Dashboard</h1>
     <p>Track and manage your 3PL prospects from first contact to closed deal</p>
   </div>
   <div class="header-actions">
+    <button class="btn btn-secondary" onclick="handleLogout()">🔒 Sign Out</button>
     <button class="btn btn-secondary" onclick="showDigest(true)">🔔 Digest</button>
     <button class="btn btn-secondary" onclick="openBin()">🗑️ Bin (<span id="binCount">0</span>)</button>
     <button class="btn btn-secondary" onclick="openSettings()">⚙️ Settings</button>
@@ -686,6 +701,8 @@
 
 <input type="file" id="attachFileInput" multiple onchange="handleAttachmentUpload(event)">
 
+</div>
+
 <script>
 let leads = [];
 let bin = [];
@@ -772,6 +789,83 @@ async function pushSettingToSupabase(key, value) {
     const { error } = await sb.from('app_settings').upsert({ key, value, updated_at: new Date().toISOString() });
     if (error) throw error;
   } catch (e) { console.error('Supabase settings sync failed:', e); }
+}
+
+// ============ AUTH GATE ============
+const AUTH_EMAIL = 'team@pickpackpro.internal';
+
+async function initAuthGate() {
+  const { data: { session } } = await sb.auth.getSession();
+  document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+  if (session) {
+    showApp();
+  } else {
+    document.getElementById('loginOverlay').classList.add('active');
+    document.getElementById('loginPassword').focus();
+  }
+}
+
+async function handleLogin() {
+  const pw = document.getElementById('loginPassword').value;
+  const errEl = document.getElementById('loginError');
+  const btn = document.getElementById('loginBtn');
+  if (!pw) { errEl.textContent = 'Enter the password'; return; }
+  btn.disabled = true; btn.textContent = 'Checking...';
+  const { error } = await sb.auth.signInWithPassword({ email: AUTH_EMAIL, password: pw });
+  btn.disabled = false; btn.textContent = 'Unlock';
+  if (error) { errEl.textContent = 'Incorrect password'; return; }
+  errEl.textContent = '';
+  document.getElementById('loginPassword').value = '';
+  showApp();
+}
+
+function showApp() {
+  document.getElementById('loginOverlay').classList.remove('active');
+  document.getElementById('appRoot').style.display = '';
+  loadAll();
+  setupRealtime();
+}
+
+async function handleLogout() {
+  if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
+  await sb.auth.signOut();
+  location.reload();
+}
+
+// ============ REALTIME SYNC ============
+let realtimeChannel = null;
+let realtimeSyncPending = false;
+
+function setupRealtime() {
+  if (realtimeChannel) return;
+  realtimeChannel = sb.channel('leads-sync')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'leads' }, scheduleRealtimeRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'leads_bin' }, scheduleRealtimeRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, scheduleRealtimeRefresh)
+    .subscribe();
+}
+
+function scheduleRealtimeRefresh() {
+  if (realtimeSyncPending) return;
+  realtimeSyncPending = true;
+  setTimeout(applyRealtimeRefresh, 400);
+}
+
+async function applyRealtimeRefresh() {
+  realtimeSyncPending = false;
+  const cloud = await pullFromSupabase();
+  if (!cloud.ok) return;
+  leads = cloud.leads;
+  bin = cloud.bin;
+  if (cloud.settingsMap.weights) weights = { ...DEFAULT_WEIGHTS, ...cloud.settingsMap.weights };
+  if (cloud.settingsMap.cadence) cadence = { ...DEFAULT_CADENCE, ...cloud.settingsMap.cadence };
+  if (cloud.settingsMap.targets) targets = { ...DEFAULT_TARGETS, ...cloud.settingsMap.targets };
+  if (typeof cloud.settingsMap.counter === 'number') leadCounter = cloud.settingsMap.counter;
+  leads.forEach(migrateLead);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(leads));
+  localStorage.setItem(BIN_KEY, JSON.stringify(bin));
+  const modalOpen = document.getElementById('modalOverlay').classList.contains('active');
+  if (!modalOpen) render();
 }
 const BACKUP_VERSION = 7;
 
@@ -3296,7 +3390,7 @@ function formatDateTime(d) {
   return isNaN(date) ? d : date.toLocaleString('en-GB', { day:'2-digit', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
-loadAll();
+initAuthGate();
 </script>
 </body>
 </html>

@@ -1,10 +1,19 @@
 # Leads Dashboard
 
-A single-page lead-tracking dashboard for PickPackPro, synced to Supabase (Postgres) so data is shared across devices/browsers.
+A single-page lead-tracking dashboard for PickPackPro, synced live to Supabase (Postgres) so all data is shared and updates in real time across everyone using it — no "local only" data.
+
+## Access control
+The app is gated by a real Supabase Auth login (not just a UI popup). Everyone shares one login:
+- Email: `team@pickpackpro.internal`
+- Password: set by you in Supabase Dashboard → Authentication → Users → Add user (check "Auto Confirm User")
+
+Database access (Row Level Security) requires that real signed-in session — the password isn't just a cosmetic gate, it's what unlocks actual read/write access to the data via Supabase Auth.
 
 ## Setup
-1. Run `supabase_schema.sql` once in your Supabase project's SQL Editor to create the `leads`, `leads_bin`, and `app_settings` tables.
-2. The app is already wired to the project's URL and anon key in `index.html`.
-3. Open the live page — the app pulls from Supabase on load and pushes every change back automatically.
+1. Create the shared login: Supabase Dashboard → Authentication → Users → Add user → email `team@pickpackpro.internal`, your chosen password, check "Auto Confirm User".
+2. Run `supabase_schema.sql` in the SQL Editor (safe to re-run any time) — creates the tables, locks them to authenticated-only access, and turns on Realtime broadcasting.
+3. Open the live page, enter the password once — everyone connected sees the same data update live as anyone adds, edits, or deletes a lead.
 
-Note: the anon key embedded in `index.html` is meant to be public-readable per Supabase's design (access is controlled by Row Level Security policies), but this app currently has no login — anyone with the page URL can read/write the leads data. Don't share the URL publicly.
+## Notes
+- The Supabase anon key in `index.html` is meant to be public (Supabase's design — access is controlled by Row Level Security, not by hiding the key).
+- To change the shared password later, update it on the `team@pickpackpro.internal` user in Supabase Dashboard → Authentication → Users.
