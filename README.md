@@ -1,19 +1,16 @@
 # Leads Dashboard
 
-A single-page lead-tracking dashboard for PickPackPro, synced live to Supabase (Postgres) so all data is shared and updates in real time across everyone using it — no "local only" data.
+A single-page lead-tracking dashboard for PickPackPro, synced live to Supabase (Postgres) so all data is shared and updates in real time across everyone using it.
 
 ## Access control
-The app is gated by a real Supabase Auth login (not just a UI popup). Everyone shares one login:
-- Email: `team@pickpackpro.internal`
-- Password: set by you in Supabase Dashboard → Authentication → Users → Add user (check "Auto Confirm User")
-
-Database access (Row Level Security) requires that real signed-in session — the password isn't just a cosmetic gate, it's what unlocks actual read/write access to the data via Supabase Auth.
+Gated by a shared passcode (no accounts/emails). The passcode is hashed and stored in Postgres; the app checks it via a `check_app_passcode` database function that the browser can call but can never use to read the hash back out. Once entered correctly on a device, that device stays unlocked for 30 days (stored locally, not the passcode itself).
 
 ## Setup
-1. Create the shared login: Supabase Dashboard → Authentication → Users → Add user → email `team@pickpackpro.internal`, your chosen password, check "Auto Confirm User".
-2. Run `supabase_schema.sql` in the SQL Editor (safe to re-run any time) — creates the tables, locks them to authenticated-only access, and turns on Realtime broadcasting.
-3. Open the live page, enter the password once — everyone connected sees the same data update live as anyone adds, edits, or deletes a lead.
+1. Run `supabase_schema.sql` in the SQL Editor (safe to re-run) — creates the tables, turns on Realtime broadcasting, and sets up the passcode function.
+2. In that file, find the line `values (true, crypt('CHANGE_ME', gen_salt('bf')))` — replace `CHANGE_ME` with your chosen passcode before running (or re-run just that block later to change it).
+3. Open the live page, enter the passcode once — everyone connected sees the same data update live as anyone adds, edits, or deletes a lead.
 
 ## Notes
-- The Supabase anon key in `index.html` is meant to be public (Supabase's design — access is controlled by Row Level Security, not by hiding the key).
-- To change the shared password later, update it on the `team@pickpackpro.internal` user in Supabase Dashboard → Authentication → Users.
+- The Supabase anon key in `index.html` is meant to be public (Supabase's design — sensitive access is controlled server-side, not by hiding the key).
+- Table-level access (`leads`, `leads_bin`, `app_settings`) is currently open to anyone holding the anon key, same as the passcode gate's own reach — anyone who gets past the passcode screen (or who has the anon key and knows to call the API directly) can read/write. This is the practical ceiling for a passcode-only, no-accounts static site. If real per-person access control is ever needed, that requires actual user accounts (Supabase Auth) instead of one shared passcode.
+- To change the passcode later, re-run the `insert into app_auth ...` block in `supabase_schema.sql` with a new value.

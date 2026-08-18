@@ -327,8 +327,8 @@
 <div class="login-overlay active" id="loginOverlay">
   <div class="login-box">
     <h1 style="margin:0 0 4px;font-size:20px">📦 Pick Pack Pro</h1>
-    <p style="margin:0 0 20px;color:#64748b;font-size:14px">Enter the team password to continue</p>
-    <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box">
+    <p style="margin:0 0 20px;color:#64748b;font-size:14px">Enter the team passcode to continue</p>
+    <input type="password" id="loginPassword" placeholder="Passcode" autocomplete="off" style="width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-size:14px;box-sizing:border-box">
     <div id="loginError" style="color:#dc2626;font-size:13px;margin-top:8px;min-height:18px"></div>
     <button class="btn btn-primary" id="loginBtn" style="width:100%;margin-top:8px;justify-content:center" onclick="handleLogin()">Unlock</button>
   </div>
@@ -791,13 +791,18 @@ async function pushSettingToSupabase(key, value) {
   } catch (e) { console.error('Supabase settings sync failed:', e); }
 }
 
-// ============ AUTH GATE ============
-const AUTH_EMAIL = 'team@pickpackpro.internal';
+// ============ PASSCODE GATE ============
+const UNLOCK_KEY = 'pickpackpro_unlocked_until';
+const UNLOCK_HOURS = 24 * 30; // stay unlocked on this device for 30 days
+
+function isUnlocked() {
+  const until = parseInt(localStorage.getItem(UNLOCK_KEY) || '0');
+  return until > Date.now();
+}
 
 async function initAuthGate() {
-  const { data: { session } } = await sb.auth.getSession();
   document.getElementById('loginPassword').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
-  if (session) {
+  if (isUnlocked()) {
     showApp();
   } else {
     document.getElementById('loginOverlay').classList.add('active');
@@ -809,13 +814,19 @@ async function handleLogin() {
   const pw = document.getElementById('loginPassword').value;
   const errEl = document.getElementById('loginError');
   const btn = document.getElementById('loginBtn');
-  if (!pw) { errEl.textContent = 'Enter the password'; return; }
+  if (!pw) { errEl.textContent = 'Enter the passcode'; return; }
   btn.disabled = true; btn.textContent = 'Checking...';
-  const { error } = await sb.auth.signInWithPassword({ email: AUTH_EMAIL, password: pw });
+  let ok = false;
+  try {
+    const { data, error } = await sb.rpc('check_app_passcode', { input_code: pw });
+    if (error) throw error;
+    ok = data === true;
+  } catch (e) { console.error('Passcode check failed:', e); }
   btn.disabled = false; btn.textContent = 'Unlock';
-  if (error) { errEl.textContent = 'Incorrect password'; return; }
+  if (!ok) { errEl.textContent = 'Incorrect passcode'; return; }
   errEl.textContent = '';
   document.getElementById('loginPassword').value = '';
+  localStorage.setItem(UNLOCK_KEY, String(Date.now() + UNLOCK_HOURS * 3600000));
   showApp();
 }
 
@@ -826,9 +837,9 @@ function showApp() {
   setupRealtime();
 }
 
-async function handleLogout() {
+function handleLogout() {
   if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
-  await sb.auth.signOut();
+  localStorage.removeItem(UNLOCK_KEY);
   location.reload();
 }
 
