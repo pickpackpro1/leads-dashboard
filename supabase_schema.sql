@@ -20,9 +20,16 @@ create table if not exists app_settings (
   updated_at timestamptz not null default now()
 );
 
--- Row Level Security: only signed-in sessions may read/write.
--- The app signs everyone in with ONE shared account (team@pickpackpro.internal)
--- after they type the correct password on the login screen — see README.
+-- Row Level Security: only the ONE shared team account may read/write.
+-- The app signs everyone in as team@pickpackpro.internal after they type the
+-- correct password on the login screen — see README.
+--
+-- IMPORTANT: this project already has Anonymous sign-ins enabled (visible in
+-- Authentication > Users). Anonymous sessions also carry Postgres role
+-- "authenticated", so a policy that only checks `auth.role() = 'authenticated'`
+-- would let anyone bypass the password screen by calling anonymous sign-in
+-- directly with the public anon key. These policies instead check the signed-in
+-- user's email, which anonymous sessions never have.
 alter table leads enable row level security;
 alter table leads_bin enable row level security;
 alter table app_settings enable row level security;
@@ -30,18 +37,24 @@ alter table app_settings enable row level security;
 drop policy if exists "anon full access leads" on leads;
 drop policy if exists "anon full access leads_bin" on leads_bin;
 drop policy if exists "anon full access app_settings" on app_settings;
-
 drop policy if exists "authenticated full access leads" on leads;
-create policy "authenticated full access leads" on leads
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-
 drop policy if exists "authenticated full access leads_bin" on leads_bin;
-create policy "authenticated full access leads_bin" on leads_bin
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
-
 drop policy if exists "authenticated full access app_settings" on app_settings;
-create policy "authenticated full access app_settings" on app_settings
-  for all using (auth.role() = 'authenticated') with check (auth.role() = 'authenticated');
+
+create policy "team account full access leads" on leads
+  for all
+  using (auth.jwt() ->> 'email' = 'team@pickpackpro.internal')
+  with check (auth.jwt() ->> 'email' = 'team@pickpackpro.internal');
+
+create policy "team account full access leads_bin" on leads_bin
+  for all
+  using (auth.jwt() ->> 'email' = 'team@pickpackpro.internal')
+  with check (auth.jwt() ->> 'email' = 'team@pickpackpro.internal');
+
+create policy "team account full access app_settings" on app_settings
+  for all
+  using (auth.jwt() ->> 'email' = 'team@pickpackpro.internal')
+  with check (auth.jwt() ->> 'email' = 'team@pickpackpro.internal');
 
 -- Realtime: broadcast row changes so every open browser updates live.
 do $$
