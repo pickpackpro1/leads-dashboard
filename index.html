@@ -643,14 +643,15 @@
 <!-- Win/Loss Export Modal -->
 <div class="modal-overlay" id="reviewOverlay">
   <div class="modal modal-sm">
-    <h2>📊 Win/Loss Review Export</h2>
+    <h2>📊 Leads Review Export</h2>
     <div class="form-grid">
       <div class="form-group"><label>From</label><input type="date" id="reviewFrom"></div>
       <div class="form-group"><label>To</label><input type="date" id="reviewTo"></div>
     </div>
-    <p style="color:#64748b;font-size:12px;margin-top:10px">Exports all deals closed (Won / Unqualified / No Reply / Lost) in this period, with reasons, values, and time-to-close, plus a summary sheet.</p>
+    <p style="color:#64748b;font-size:12px;margin-top:10px">Exports new leads received in this period (with full info and status), plus all deals closed (Won / Unqualified / No Reply / Lost) with reasons, values, and time-to-close — plus a summary sheet.</p>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeReview()">Cancel</button>
+      <button class="btn btn-secondary" onclick="printReview()">🖨️ Printable</button>
       <button class="btn btn-success" onclick="exportReview()">💾 Export Review</button>
     </div>
   </div>
@@ -1529,7 +1530,7 @@ function renderInsights() {
         <button class="btn btn-primary" onclick="openWeekly()">📊 Weekly Report</button>
       </div>
       <div class="insights-box full" style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
-        <div><h3 style="margin-bottom:4px">Win/Loss Review</h3><p style="font-size:13px;color:#64748b">Export closed deals for a period with reasons, values, and time-to-close.</p></div>
+        <div><h3 style="margin-bottom:4px">Leads Review</h3><p style="font-size:13px;color:#64748b">New leads received plus closed deals for a period, with reasons, values, and time-to-close — as Excel or a printable one-pager.</p></div>
         <button class="btn btn-success" onclick="openReview()">📊 Export Review</button>
       </div>
     </div>`;
@@ -1591,10 +1592,13 @@ function openReview() {
   document.getElementById('reviewOverlay').classList.add('active');
 }
 function closeReview() { document.getElementById('reviewOverlay').classList.remove('active'); }
-function exportReview() {
+
+function gatherReviewData() {
   const from = document.getElementById('reviewFrom').value;
   const to = document.getElementById('reviewTo').value;
-  if (!from || !to) { alert('Set both dates'); return; }
+  if (!from || !to) { alert('Set both dates'); return null; }
+
+  const newLeads = leads.filter(l => l.dateReceived && l.dateReceived >= from && l.dateReceived <= to);
 
   const closedInPeriod = leads.filter(l => {
     if (![...WON_FAMILY, ...DEAD_STATUSES].includes(l.status)) return false;
@@ -1603,7 +1607,14 @@ function exportReview() {
     else { const entry = (l.stageHistory||[]).filter(h => h.stage === l.status).pop(); d = entry ? entry.date : l.stageChangedAt; }
     return d >= from && d <= to;
   });
-  if (!closedInPeriod.length) { alert('No deals closed in this period'); return; }
+
+  if (!newLeads.length && !closedInPeriod.length) { alert('No new leads or closed deals in this period'); return null; }
+
+  const newLeadRows = newLeads.map(l => ({
+    'Lead ID': l.leadId, 'Company': l.company, 'Contact': l.contactName, 'Email': l.email || '', 'Phone': l.phone || '',
+    'Source': l.source, 'Service': l.serviceInterest, 'Value £/mo': parseFloat(l.estimatedValue)||0,
+    'Status': l.status, 'Priority': l.priority || '', 'Received': l.dateReceived, 'Next Follow-up': l.nextFollowUp || ''
+  }));
 
   const wonRows = [], lostRows = [];
   closedInPeriod.forEach(l => {
@@ -1622,20 +1633,87 @@ function exportReview() {
 
   const wonTotal = wonRows.reduce((s,r) => s + r['Value £/mo'], 0);
   const lostTotal = lostRows.reduce((s,r) => s + r['Value £/mo'], 0);
+  const newLeadsValue = newLeadRows.reduce((s,r) => s + r['Value £/mo'], 0);
   const summary = [
     { 'Metric': 'Period', 'Value': `${from} to ${to}` },
+    { 'Metric': 'New Leads', 'Value': newLeadRows.length },
+    { 'Metric': 'New Leads Value £/mo', 'Value': newLeadsValue },
     { 'Metric': 'Deals Won', 'Value': wonRows.length },
     { 'Metric': 'Won Value £/mo', 'Value': wonTotal },
     { 'Metric': 'Deals Lost/Dead', 'Value': lostRows.length },
     { 'Metric': 'Lost Value £/mo', 'Value': lostTotal },
-    { 'Metric': 'Win Rate (of closed)', 'Value': ((wonRows.length/(wonRows.length+lostRows.length))*100).toFixed(1) + '%' }
+    { 'Metric': 'Win Rate (of closed)', 'Value': (wonRows.length+lostRows.length) ? ((wonRows.length/(wonRows.length+lostRows.length))*100).toFixed(1) + '%' : 'n/a' }
   ];
 
+  return { from, to, newLeadRows, wonRows, lostRows, summary, wonTotal, lostTotal, newLeadsValue };
+}
+
+function exportReview() {
+  const d = gatherReviewData();
+  if (!d) return;
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(summary), 'Summary');
-  if (wonRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(wonRows), 'Won');
-  if (lostRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lostRows), 'Lost & Dead');
-  XLSX.writeFile(wb, `pickpackpro_review_${from}_to_${to}.xlsx`);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.summary), 'Summary');
+  if (d.newLeadRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.newLeadRows), 'New Leads');
+  if (d.wonRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.wonRows), 'Won');
+  if (d.lostRows.length) XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(d.lostRows), 'Lost & Dead');
+  XLSX.writeFile(wb, `pickpackpro_review_${d.from}_to_${d.to}.xlsx`);
+  closeReview();
+}
+
+function printReview() {
+  const d = gatherReviewData();
+  if (!d) return;
+
+  const newLeadsTable = d.newLeadRows.length ? `<h2>New Leads (${d.newLeadRows.length})</h2>
+    <table><thead><tr><th>ID</th><th>Company</th><th>Contact</th><th>Source</th><th>Service</th><th>Status</th><th>£/mo</th></tr></thead><tbody>
+    ${d.newLeadRows.map(r => `<tr><td>${esc(r['Lead ID'])}</td><td>${esc(r['Company'])}</td><td>${esc(r['Contact'])}</td><td>${esc(r['Source']||'')}</td><td>${esc(r['Service']||'')}</td><td>${esc(r['Status']||'')}</td><td>£${r['Value £/mo'].toLocaleString()}</td></tr>`).join('')}
+    </tbody></table>` : '';
+
+  const wonTable = d.wonRows.length ? `<h2>Won (${d.wonRows.length})</h2>
+    <table><thead><tr><th>ID</th><th>Company</th><th>Service</th><th>Source</th><th>£/mo</th><th>Days to Close</th></tr></thead><tbody>
+    ${d.wonRows.map(r => `<tr><td>${esc(r['Lead ID'])}</td><td>${esc(r['Company'])}</td><td>${esc(r['Service']||'')}</td><td>${esc(r['Source']||'')}</td><td>£${r['Value £/mo'].toLocaleString()}</td><td>${r['Days to Close']}</td></tr>`).join('')}
+    </tbody></table>` : '';
+
+  const lostTable = d.lostRows.length ? `<h2>Lost / Dead (${d.lostRows.length})</h2>
+    <table><thead><tr><th>ID</th><th>Company</th><th>Status</th><th>Reason</th><th>£/mo</th></tr></thead><tbody>
+    ${d.lostRows.map(r => `<tr><td>${esc(r['Lead ID'])}</td><td>${esc(r['Company'])}</td><td>${esc(r['Status']||'')}</td><td>${esc(r['Reason']||'')}</td><td>£${r['Value £/mo'].toLocaleString()}</td></tr>`).join('')}
+    </tbody></table>` : '';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Leads Review ${d.from} to ${d.to}</title>
+  <style>
+    @page { margin: 15mm; }
+    body { font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; color: #1a2332; font-size: 12px; line-height: 1.45; }
+    h1 { font-size: 20px; margin: 0 0 2px; }
+    .sub { color: #64748b; font-size: 13px; margin-bottom: 16px; }
+    h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; color: #475569; border-bottom: 1px solid #e2e8f0; padding-bottom: 3px; margin: 16px 0 8px; }
+    .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 6px; }
+    .kpi { background: #f8fafc; border-radius: 6px; padding: 10px; text-align: center; }
+    .kpi .n { font-size: 20px; font-weight: 700; color: #1e3a5f; }
+    .kpi .l { font-size: 10px; color: #64748b; text-transform: uppercase; margin-top: 2px; }
+    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    th { text-align: left; color: #64748b; font-size: 10px; text-transform: uppercase; padding: 5px 6px; border-bottom: 1px solid #cbd5e1; }
+    td { padding: 5px 6px; border-bottom: 1px solid #f1f5f9; }
+    .foot { margin-top: 20px; padding-top: 8px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 10px; display: flex; justify-content: space-between; }
+    @media print { .noprint { display: none; } }
+  </style></head><body>
+  <div class="noprint" style="margin-bottom:14px"><button onclick="window.print()" style="padding:8px 16px;font-size:13px;cursor:pointer">🖨️ Print / Save as PDF</button></div>
+  <h1>Leads Review</h1>
+  <div class="sub">Pick Pack Pro · ${formatDateRaw(d.from)} – ${formatDateRaw(d.to)}</div>
+  <div class="kpis">
+    <div class="kpi"><div class="n">${d.newLeadRows.length}</div><div class="l">New leads</div></div>
+    <div class="kpi"><div class="n" style="color:#059669">${d.wonRows.length}</div><div class="l">Deals won</div></div>
+    <div class="kpi"><div class="n" style="color:#dc2626">${d.lostRows.length}</div><div class="l">Lost / dead</div></div>
+    <div class="kpi"><div class="n">${(d.wonRows.length+d.lostRows.length) ? (d.wonRows.length/(d.wonRows.length+d.lostRows.length)*100).toFixed(0)+'%' : 'n/a'}</div><div class="l">Win rate</div></div>
+  </div>
+  ${newLeadsTable}
+  ${wonTable}
+  ${lostTable}
+  <div class="foot"><span>Pick Pack Pro — Leads Dashboard</span><span>Generated ${new Date().toLocaleDateString('en-GB')}</span></div>
+  </body></html>`;
+  const w = window.open('', '_blank');
+  if (!w) { alert('Please allow pop-ups for this page to use printing.'); return; }
+  w.document.write(html);
+  w.document.close();
   closeReview();
 }
 
